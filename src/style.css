@@ -326,7 +326,7 @@ body {
 }
 
 .stat-value {
-    font-size: 17px;
+    font-size: 16px;
     color: var(--blue-bright);
     font-variant-numeric: tabular-nums;
 }
