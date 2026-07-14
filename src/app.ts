@@ -4,7 +4,8 @@ import { gestureStream } from "@thi.ng/rstream-gestures";
 import { dedupe, map } from "@thi.ng/transducers";
 import { equiv } from "@thi.ng/equiv";
 import { CA } from "./ca.js";
-import { type AppState, DEFAULTS, db, fps$, gen$ } from "./state.js";
+import { CHECK_INTERVAL, scanEntropy } from "./entropy.js";
+import { type AppState, DEFAULTS, db, entropy$, fps$, gen$ } from "./state.js";
 
 const COLS = 600;
 const ROWS = 600;
@@ -132,6 +133,7 @@ let frames = 0;
 let acc = 0;
 let stepAcc = 0;
 let displayGen = 0; // generation currently shown on the canvas
+let lastScanGen = 0; // generation of the last entropy scan (POC)
 
 fromRAF({ timestamp: true, t0: true }).subscribe({
     next(t) {
@@ -152,6 +154,28 @@ fromRAF({ timestamp: true, t0: true }).subscribe({
                 gen$.next(shown);
             }
             // steps === 0 -> slow motion: hold the last frame, advance nothing
+
+            // POC: periodically scan patches for noise, re-seed the noisy ones.
+            if (st.autoReseed) {
+                if (ca.generation < lastScanGen) lastScanGen = 0; // counter was reset
+                if (ca.generation - lastScanGen >= CHECK_INTERVAL) {
+                    lastScanGen = ca.generation;
+                    const { noisy, max } = scanEntropy(
+                        ca.grid,
+                        ca.cols,
+                        ca.rows,
+                        st.entropyThreshold,
+                    );
+                    entropy$.next(max);
+                    if (noisy.length) {
+                        for (const p of noisy)
+                            ca.populateRect(p.x0, p.y0, p.w, p.h);
+                        console.log(
+                            `[entropy] gen ${ca.generation}: re-seeded ${noisy.length} patch(es), max entropy ${max.toFixed(3)}`,
+                        );
+                    }
+                }
+            }
         } else if (dirty) {
             ca.render();
             ca.blit(ctx);
@@ -305,6 +329,8 @@ const field$ = <T>(f: (s: AppState) => T) =>
 const running$ = field$((s) => s.running);
 const dist$ = field$((s) => s.dist);
 const stripes$ = field$((s) => s.stripes);
+const autoReseed$ = field$((s) => s.autoReseed);
+const threshold$ = field$((s) => s.entropyThreshold);
 const speed$ = field$((s) => s.speed);
 const rule$ = field$((s) => `${DIR_ARROWS[s.refDir]} ${s.survival}`);
 const brush$ = field$((s) => s.brush);
@@ -315,6 +341,8 @@ const runLabel$ = running$.transform(map((r) => (r ? "Pause" : "Run")));
 const genText$ = gen$.transform(map((g: number) => g.toLocaleString("en-US")));
 const fpsText$ = fps$.transform(map((f: number) => `${Math.round(f)}`));
 const speedText$ = speed$.transform(map((s) => `${s.toFixed(1)}×`));
+const thresholdText$ = threshold$.transform(map((t) => t.toFixed(2)));
+const entropyText$ = entropy$.transform(map((e: number) => e.toFixed(2)));
 
 const num = (e: Event) => (e.target as HTMLInputElement).valueAsNumber;
 
@@ -460,6 +488,47 @@ const panel = [
     ],
 
     [
+        "label.toggle",
+        {},
+        [
+            "input",
+            {
+                type: "checkbox",
+                checked: autoReseed$,
+                onchange: (e: Event) =>
+                    db.resetIn(
+                        ["autoReseed"],
+                        (e.target as HTMLInputElement).checked,
+                    ),
+            },
+        ],
+        ["span", {}, "Auto re-seed noisy patches"],
+    ],
+
+    [
+        "div.field",
+        {},
+        [
+            "div.field-head",
+            {},
+            ["span.field-label", {}, "Noise threshold"],
+            ["span.field-value", {}, thresholdText$],
+        ],
+        [
+            "input.slider",
+            {
+                type: "range",
+                min: 0.5,
+                max: 1,
+                step: 0.01,
+                value: threshold$,
+                oninput: (e: Event) =>
+                    db.resetIn(["entropyThreshold"], num(e)),
+            },
+        ],
+    ],
+
+    [
         "div.readout",
         {},
         [
@@ -479,6 +548,12 @@ const panel = [
             {},
             ["span.stat-label", {}, "fps"],
             ["span.stat-value", {}, fpsText$],
+        ],
+        [
+            "div.stat",
+            {},
+            ["span.stat-label", {}, "entropy"],
+            ["span.stat-value", {}, entropyText$],
         ],
     ],
 

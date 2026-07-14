@@ -147,6 +147,31 @@ export class CA {
         this.generation = 0;
     }
 
+    /**
+     * Re-apply the seed pattern inside a rectangle only, using the same global
+     * coordinate formula as {@link populate} (so seed lines stay aligned across
+     * patches). Does NOT reset the generation counter — this is a local
+     * intervention into a running simulation, not a restart.
+     */
+    populateRect(x0: number, y0: number, w: number, h: number) {
+        const { grid, cols, rows, dist, stripes } = this;
+        const yEnd = Math.min(rows, y0 + h);
+        const xEnd = Math.min(cols, x0 + w);
+        for (let i = Math.max(0, y0); i < yEnd; i++) {
+            const base = i * cols;
+            const iLine = i % dist === 0;
+            for (let j = Math.max(0, x0); j < xEnd; j++) {
+                grid[base + j] = stripes
+                    ? iLine || j === 0
+                        ? 0
+                        : 1
+                    : j % dist === 0 || iLine
+                      ? 0
+                      : 1;
+            }
+        }
+    }
+
     /** Wipe the grid to all-empty (original `empty()`). */
     clear() {
         this.grid.fill(0);

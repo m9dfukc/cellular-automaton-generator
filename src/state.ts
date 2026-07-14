@@ -14,6 +14,10 @@ export interface AppState {
     refDir: number;
     /** rule: survival threshold (original = 6) */
     survival: number;
+    /** POC: re-seed patches whose local block entropy exceeds the threshold */
+    autoReseed: boolean;
+    /** normalised patch-entropy threshold (0..1) for the auto reseed */
+    entropyThreshold: number;
     /** pencil size in cells (edit tool, not part of the simulation) */
     brush: number;
     /** edit tool: paint live cells ("draw") or clear them ("erase") */
@@ -26,13 +30,21 @@ export interface AppState {
  */
 export const DEFAULTS: Pick<
     AppState,
-    "dist" | "stripes" | "speed" | "refDir" | "survival"
+    | "dist"
+    | "stripes"
+    | "speed"
+    | "refDir"
+    | "survival"
+    | "autoReseed"
+    | "entropyThreshold"
 > = {
     dist: 100,
     stripes: false,
     speed: 1,
     refDir: 0,
     survival: 6,
+    autoReseed: false,
+    entropyThreshold: 0.9,
 };
 
 export const db = defAtom<AppState>({
@@ -46,3 +58,5 @@ export const db = defAtom<AppState>({
 // never trigger config-derived reactions.
 export const gen$ = reactive(0);
 export const fps$ = reactive(0);
+/** max patch entropy from the latest scan (0 until the first scan runs) */
+export const entropy$ = reactive(0);
