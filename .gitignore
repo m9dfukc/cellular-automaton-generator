@@ -1,0 +1,47 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+*.tsbuildinfo
+
+# caches
+.cache/
+.vite/
+node_modules/.cache/
+
+# test / bench artifacts
+frame_*.png
+rules_*.png
+ui_*.png
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# env
+.env
+.env.*
+!.env.example
+
+# editors
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+
+# os
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# llm
+.claude/
+CLAUDE.md
+CONTEXT.md
+docs/agents/
