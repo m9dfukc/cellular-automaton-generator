@@ -8,7 +8,7 @@ kernel, because that's where the speed actually lives.
 
 **[▶︎ Run it live](https://m9dfukc.github.io/cellular-automaton-generator/)** — drag to draw · press `r` for a new rule · **Download PNG** to keep a frame
 
-<img src="docs/assets/application.png" width="820"
+<img src="docs/assets/application.webp" width="820"
      alt="The applet running in the browser: a dark instrument HUD on the left, a blue/black/white cellular-automaton pattern filling the canvas on the right" />
 
 ## Backstory
@@ -33,6 +33,7 @@ rules from the Randomize pool, caught at different generations.
   <img src="docs/assets/ca-experiment-gen248.webp"  width="240" alt="exported frame, generation 248" />
   <img src="docs/assets/ca-experiment-gen343.webp"  width="240" alt="exported frame, generation 343" />
   <img src="docs/assets/ca-experiment-gen535.webp"  width="240" alt="exported frame, generation 535" />
+  <img src="docs/assets/ca-experiment-gen687.webp"  width="240" alt="exported frame, generation 687" />
   <img src="docs/assets/ca-experiment-gen719.webp"  width="240" alt="exported frame, generation 719" />
   <img src="docs/assets/ca-experiment-gen985.webp"  width="240" alt="exported frame, generation 985" />
   <img src="docs/assets/ca-experiment-gen1027.webp" width="240" alt="exported frame, generation 1027" />
