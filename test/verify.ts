@@ -1,4 +1,6 @@
 import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { CA } from "../src/ca.js";
 
@@ -259,18 +261,11 @@ function writePNG(path: string, w: number, h: number, abgr: Uint32Array) {
 }
 
 const show = new CA({ cols: 600, rows: 600, dist: 100, stripes: false });
+const outDir = tmpdir();
 for (let g = 0; g < 60; g++) show.step();
-writePNG(
-    "/home/claude/ca-applet/frame_gen60.png",
-    600,
-    600,
-    show.img.data as Uint32Array,
-);
+const png60 = join(outDir, "frame_gen60.png");
+writePNG(png60, 600, 600, show.img.data as Uint32Array);
 for (let g = 0; g < 90; g++) show.step();
-writePNG(
-    "/home/claude/ca-applet/frame_gen150.png",
-    600,
-    600,
-    show.img.data as Uint32Array,
-);
-console.log("wrote frame_gen60.png, frame_gen150.png");
+const png150 = join(outDir, "frame_gen150.png");
+writePNG(png150, 600, 600, show.img.data as Uint32Array);
+console.log(`wrote ${png60}, ${png150}`);
