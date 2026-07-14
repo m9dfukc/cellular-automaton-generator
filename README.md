@@ -57,6 +57,7 @@ yarn test         # verifies the engine is bit-exact vs the original sketch
 | Action            | Input                                                                                                     |
 | ----------------- | --------------------------------------------------------------------------------------------------------- |
 | Run / pause       | `space` or the Run button                                                                                 |
+| Step one frame    | `n` or Step ▶ — advance a single generation (only while paused; disabled during run)                      |
 | Randomize rule    | `r` or Randomize — random rule, **keeps the current buffer** so it keeps evolving under the new algorithm |
 | Reset             | `x` or Reset — restore the original rule + defaults, then reseed                                          |
 | Seed              | `s` or Seed — lay down the first-frame seed pattern, keeping the current rule                             |

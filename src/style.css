@@ -144,6 +144,17 @@ body {
     transform: translateY(0.5px);
 }
 
+.btn:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+}
+
+/* keep disabled buttons inert on hover (Step ▶ while the sim is running) */
+.btn:disabled:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--line);
+}
+
 .btn-primary {
     grid-column: 1 / -1;
     color: #fff;

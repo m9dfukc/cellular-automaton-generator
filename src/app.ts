@@ -90,6 +90,21 @@ const reset = () => {
     reseed();
 };
 
+/**
+ * Advance a single generation while paused, then draw it. No-op while running
+ * (the RAF loop already drives frames). Pausing reconciles the canvas to the
+ * true current grid (see the reaction below), so `ca.generation` is exactly
+ * what's on screen and each call moves the display forward by exactly one.
+ */
+const stepForward = () => {
+    if (db.deref().running) return;
+    ca.process(); // advance the grid one generation (no draw)
+    ca.render(); // colour the new current grid (same formula as step())
+    ca.blit(ctx);
+    displayGen = ca.generation;
+    gen$.next(ca.generation);
+};
+
 /** Download the current canvas frame as a PNG (captures exactly what's shown). */
 const downloadPNG = () => {
     canvas.toBlob((blob) => {
@@ -187,6 +202,26 @@ fromAtom(db)
         },
     });
 
+// Reconcile the canvas on pause. While running, the fused loop draws the
+// *pre-step* frame and leaves the grid one generation ahead of what's shown;
+// re-rendering the true current grid here means `ca.generation` matches the
+// canvas, so single-frame stepping (`n` / Step ▶) advances from a defined frame.
+fromAtom(db)
+    .transform(
+        map((s: AppState) => s.running),
+        dedupe(equiv),
+    )
+    .subscribe({
+        next(running) {
+            if (running) return;
+            ca.render();
+            ca.blit(ctx);
+            dirty = false;
+            displayGen = ca.generation;
+            gen$.next(ca.generation);
+        },
+    });
+
 // --- input -----------------------------------------------------------------
 
 // Pointer drawing: brush of the current size, painting (draw) or clearing
@@ -239,13 +274,16 @@ gestureStream(canvas, { local: true }).subscribe({
     },
 });
 
-// Keyboard: space = run/pause, r = randomize, x = reset, c = clear.
+// Keyboard: space = run/pause, n = step (paused), r = randomize, x = reset,
+// s = seed, c = clear.
 fromDOMEvent(window, "keydown").subscribe({
     next(e) {
         const k = (e as KeyboardEvent).key;
         if (k === " ") {
             e.preventDefault();
             db.swapIn(["running"], (x) => !x);
+        } else if (k === "n" || k === "N") {
+            stepForward();
         } else if (k === "r" || k === "R") {
             randomize();
         } else if (k === "x" || k === "X") {
@@ -298,6 +336,15 @@ const panel = [
             "button.btn.btn-primary",
             { onclick: () => db.swapIn(["running"], (x) => !x) },
             runLabel$,
+        ],
+        [
+            "button.btn.btn-wide",
+            {
+                onclick: stepForward,
+                disabled: running$,
+                title: "Advance one generation (n) — available while paused",
+            },
+            "Step ▶",
         ],
         ["button.btn", { onclick: randomize }, "Randomize"],
         ["button.btn", { onclick: reset }, "Reset"],
@@ -440,6 +487,8 @@ const panel = [
         {},
         ["kbd", {}, "space"],
         " run/pause · ",
+        ["kbd", {}, "n"],
+        " step · ",
         ["kbd", {}, "r"],
         " randomize · ",
         ["kbd", {}, "x"],
