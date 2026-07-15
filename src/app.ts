@@ -106,6 +106,20 @@ const stepForward = () => {
     gen$.next(ca.generation);
 };
 
+/**
+ * FNV-1a over the framebuffer — a short content tag for the filename, so two
+ * frames caught at the same generation under different rules don't collide.
+ * Hashes the pixels, not the grid: while running, `step()` draws the pre-step
+ * frame and leaves `grid` a generation ahead of the canvas, so only the
+ * framebuffer is guaranteed to match the PNG.
+ */
+const frameHash = () => {
+    const px = ca.img.data;
+    let h = 0x811c9dc5;
+    for (let i = 0; i < px.length; i++) h = Math.imul(h ^ px[i], 0x01000193);
+    return (h >>> 0).toString(16).padStart(8, "0").slice(0, 6);
+};
+
 /** Download the current canvas frame as a PNG (captures exactly what's shown). */
 const downloadPNG = () => {
     canvas.toBlob((blob) => {
@@ -113,7 +127,7 @@ const downloadPNG = () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `ca-experiment-gen${displayGen}.png`;
+        a.download = `ca-experiment-gen${displayGen}-${frameHash()}.png`;
         document.body.appendChild(a);
         a.click();
         a.remove();
