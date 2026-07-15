@@ -30,7 +30,34 @@ const KEEPER_RULES: ReadonlyArray<readonly [refDir: number, survival: number]> =
         [7, 7],
     ];
 
+// --- hot reload ------------------------------------------------------------
+// This module is the HMR boundary for the whole sketch: editing anything it
+// imports re-executes *this* file, rebuilding the CA from scratch. Without a
+// snapshot every edit would drop the sketch back to generation 0, so the state
+// worth keeping crosses the reload here and the old instance is torn down at
+// the bottom of the file.
+//
+// The snapshot is plain data by design — a reload may have replaced the CA
+// class or the atom itself, so handing the live instances over would carry
+// stale code into the new module.
+//
+// Vite drops every `import.meta.hot` branch from production builds.
+
+interface Snapshot {
+    state: AppState;
+    grid: Uint8Array;
+    generation: number;
+}
+
+const snapshot: Snapshot | undefined = import.meta.hot?.data.snapshot;
+
 // --- engine + canvas -------------------------------------------------------
+
+// Merged over the live state rather than assigned, so a field added to
+// AppState since the snapshot was taken still arrives with its default. The
+// trade-off: a restored session keeps its old values, so edits to DEFAULTS
+// only show up after a Reset or a hard reload.
+if (snapshot) db.swap((s) => ({ ...s, ...snapshot.state }));
 
 const init = db.deref();
 const ca = new CA({
@@ -48,7 +75,11 @@ canvas.height = ROWS;
 canvas.className = "ca-canvas";
 const ctx = canvas.getContext("2d", { alpha: false })!;
 ctx.imageSmoothingEnabled = false;
-document.getElementById("stage")!.appendChild(canvas);
+// replaceChildren rather than appendChild: init owns the stage, so a hot
+// reload can't stack a second canvas under the first. Teardown alone can't
+// guarantee that — a module that throws midway never reaches its dispose hook,
+// leaving its canvas behind for every later reload to append beneath.
+document.getElementById("stage")!.replaceChildren(canvas);
 
 // `dirty` forces one render while paused (after an edit / reseed / clear).
 let dirty = true;
@@ -149,7 +180,7 @@ let stepAcc = 0;
 let displayGen = 0; // generation currently shown on the canvas
 let lastScanGen = 0; // generation of the last entropy scan (POC)
 
-fromRAF({ timestamp: true, t0: true }).subscribe({
+const rafSub = fromRAF({ timestamp: true, t0: true }).subscribe({
     next(t) {
         const dt = t - lastT;
         lastT = t;
@@ -214,7 +245,7 @@ fromRAF({ timestamp: true, t0: true }).subscribe({
 // would re-fire these and reseed the grid.
 
 // Re-seed whenever the seeding parameters change.
-fromAtom(db)
+const seedSub = fromAtom(db)
     .transform(
         map((s: AppState) => [s.dist, s.stripes] as const),
         dedupe(equiv),
@@ -228,7 +259,7 @@ fromAtom(db)
     });
 
 // Apply rule changes (reference direction + survival) in place — no reseed.
-fromAtom(db)
+const ruleSub = fromAtom(db)
     .transform(
         map((s: AppState) => [s.refDir, s.survival] as const),
         dedupe(equiv),
@@ -244,7 +275,7 @@ fromAtom(db)
 // *pre-step* frame and leaves the grid one generation ahead of what's shown;
 // re-rendering the true current grid here means `ca.generation` matches the
 // canvas, so single-frame stepping (`n` / Step ▶) advances from a defined frame.
-fromAtom(db)
+const pauseSub = fromAtom(db)
     .transform(
         map((s: AppState) => s.running),
         dedupe(equiv),
@@ -296,7 +327,7 @@ const strokeTo = (gx: number, gy: number) => {
     markDirty();
 };
 
-gestureStream(canvas, { local: true }).subscribe({
+const gestureSub = gestureStream(canvas, { local: true }).subscribe({
     next(e) {
         if (e.type === "start" || e.type === "drag") {
             const [px, py] = e.pos;
@@ -314,7 +345,7 @@ gestureStream(canvas, { local: true }).subscribe({
 
 // Keyboard: space = run/pause, n = step (paused), r = randomize, x = reset,
 // s = seed, c = clear.
-fromDOMEvent(window, "keydown").subscribe({
+const keySub = fromDOMEvent(window, "keydown").subscribe({
     next(e) {
         const k = (e as KeyboardEvent).key;
         if (k === " ") {
@@ -536,8 +567,7 @@ const panel = [
                 max: 1,
                 step: 0.01,
                 value: threshold$,
-                oninput: (e: Event) =>
-                    db.resetIn(["entropyThreshold"], num(e)),
+                oninput: (e: Event) => db.resetIn(["entropyThreshold"], num(e)),
             },
         ],
     ],
@@ -596,4 +626,46 @@ const panel = [
     ],
 ];
 
-$compile(panel).mount(document.getElementById("controls")!);
+const ui = $compile(panel);
+ui.mount(document.getElementById("controls")!);
+
+// --- hot reload: restore + teardown ----------------------------------------
+
+// The grid restore has to come last. `fromAtom` emits its current value on
+// subscribe, so wiring the reactions above already fired the seed reaction and
+// repopulated the grid — a grid restored any earlier would be overwritten.
+// Skipped when COLS/ROWS were edited, since the old grid no longer fits.
+if (snapshot && snapshot.grid.length === ca.size) {
+    ca.grid.set(snapshot.grid);
+    ca.generation = snapshot.generation;
+    gen$.next(snapshot.generation);
+    markDirty();
+}
+
+if (import.meta.hot) {
+    import.meta.hot.accept();
+    // Vite awaits this before importing the replacement module, and rdom's
+    // unmount is async — so awaiting it keeps the old panel from lingering
+    // alongside the new one.
+    import.meta.hot.dispose(async (data) => {
+        data.snapshot = {
+            state: db.deref(),
+            grid: ca.grid.slice(),
+            generation: ca.generation,
+        } satisfies Snapshot;
+        // Unsubscribing a leaf cascades up to each root stream's cleanup
+        // (removeWatch / cancelAnimationFrame / removeEventListener). Leaving
+        // any attached would leak a second RAF loop into the next module —
+        // two loops stepping one engine looks like the sketch doubling speed.
+        for (const sub of [
+            rafSub,
+            seedSub,
+            ruleSub,
+            pauseSub,
+            gestureSub,
+            keySub,
+        ])
+            sub.unsubscribe();
+        await ui.unmount();
+    });
+}

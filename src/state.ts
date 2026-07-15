@@ -56,7 +56,14 @@ export const db = defAtom<AppState>({
 
 // High-frequency readouts are kept *out* of the config atom so 60 Hz updates
 // never trigger config-derived reactions.
-export const gen$ = reactive(0);
-export const fps$ = reactive(0);
+//
+// `closeOut: never` because these outlive any single mounting of the UI. A
+// stream closes itself once its last subscriber leaves, so unmounting the
+// panel would leave them UNSUBSCRIBED — fine for a page that is going away,
+// fatal across a hot reload: this module is not re-executed when only `app.ts`
+// or its siblings change, so the next UI would resubscribe to a dead stream
+// and throw ("operation not allowed in state UNSUBSCRIBED").
+export const gen$ = reactive(0, { closeOut: "never" });
+export const fps$ = reactive(0, { closeOut: "never" });
 /** max patch entropy from the latest scan (0 until the first scan runs) */
-export const entropy$ = reactive(0);
+export const entropy$ = reactive(0, { closeOut: "never" });
