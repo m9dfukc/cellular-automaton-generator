@@ -30,15 +30,15 @@ Still frames exported straight from the app with **Download PNG** — different
 rules from the Randomize pool, caught at different generations.
 
 <p>
-  <img src="docs/assets/ca-experiment-gen248.webp"  width="240" alt="exported frame, generation 248" />
-  <img src="docs/assets/ca-experiment-gen343.webp"  width="240" alt="exported frame, generation 343" />
-  <img src="docs/assets/ca-experiment-gen535.webp"  width="240" alt="exported frame, generation 535" />
-  <img src="docs/assets/ca-experiment-gen687.webp"  width="240" alt="exported frame, generation 687" />
-  <img src="docs/assets/ca-experiment-gen719.webp"  width="240" alt="exported frame, generation 719" />
-  <img src="docs/assets/ca-experiment-gen985.webp"  width="240" alt="exported frame, generation 985" />
-  <img src="docs/assets/ca-experiment-gen1027.webp" width="240" alt="exported frame, generation 1027" />
-  <img src="docs/assets/ca-experiment-gen2731.webp" width="240" alt="exported frame, generation 2731" />
-  <img src="docs/assets/ca-experiment-gen4080.webp" width="240" alt="exported frame, generation 4080" />
+  <img src="docs/assets/ca-experiment-gen248.webp"  width="270" alt="exported frame, generation 248" />
+  <img src="docs/assets/ca-experiment-gen343.webp"  width="270" alt="exported frame, generation 343" />
+  <img src="docs/assets/ca-experiment-gen535.webp"  width="270" alt="exported frame, generation 535" />
+  <img src="docs/assets/ca-experiment-gen687.webp"  width="270" alt="exported frame, generation 687" />
+  <img src="docs/assets/ca-experiment-gen719.webp"  width="270" alt="exported frame, generation 719" />
+  <img src="docs/assets/ca-experiment-gen985.webp"  width="270" alt="exported frame, generation 985" />
+  <img src="docs/assets/ca-experiment-gen1027.webp" width="270" alt="exported frame, generation 1027" />
+  <img src="docs/assets/ca-experiment-gen2731.webp" width="270" alt="exported frame, generation 2731" />
+  <img src="docs/assets/ca-experiment-gen4080.webp" width="270" alt="exported frame, generation 4080" />
 </p>
 
 ## Run
