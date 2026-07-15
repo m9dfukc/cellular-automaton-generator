@@ -557,21 +557,28 @@ const panel = [
         ],
     ],
 
+    // keyboard shortcuts are wrapped in .hint-keys so the mobile layout can
+    // hide them (no keyboard on touch) while keeping "drag to draw"
     [
         "div.hint",
         {},
-        ["kbd", {}, "space"],
-        " run/pause · ",
-        ["kbd", {}, "n"],
-        " step · ",
-        ["kbd", {}, "r"],
-        " randomize · ",
-        ["kbd", {}, "x"],
-        " reset · ",
-        ["kbd", {}, "s"],
-        " seed · ",
-        ["kbd", {}, "c"],
-        " clear · drag to draw",
+        [
+            "span.hint-keys",
+            {},
+            ["kbd", {}, "space"],
+            " run/pause · ",
+            ["kbd", {}, "n"],
+            " step · ",
+            ["kbd", {}, "r"],
+            " randomize · ",
+            ["kbd", {}, "x"],
+            " reset · ",
+            ["kbd", {}, "s"],
+            " seed · ",
+            ["kbd", {}, "c"],
+            " clear · ",
+        ],
+        "drag to draw",
     ],
 ];
 

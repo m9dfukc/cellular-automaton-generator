@@ -65,6 +65,10 @@ body {
     top: clamp(12px, 2.4vmin, 28px);
     left: clamp(12px, 2.4vmin, 28px);
     z-index: 10;
+    /* on viewports too short for the full panel, scroll it instead of
+	   clipping the lower controls (no effect when it fits) */
+    max-height: calc(100dvh - 2 * clamp(12px, 2.4vmin, 28px));
+    overflow-y: auto;
 }
 
 .panel {
@@ -364,19 +368,73 @@ kbd {
     }
 }
 
-@media (max-width: 560px) {
-    #controls {
-        top: auto;
-        bottom: 0;
-        left: 0;
-        right: 0;
+/* --- mobile ---------------------------------------------------------------
+   Below 600px the fixed-overlay layout stops working (the panel would cover
+   the canvas), so the page becomes a flex column: canvas on top, controls in
+   a scrollable region below. Desktop is untouched. */
+
+@media (max-width: 600px) {
+    body {
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+        overflow: hidden;
     }
+
+    #stage {
+        position: static;
+        flex: none;
+        padding: 12px;
+    }
+
+    .ca-canvas {
+        /* 100% of the stage's content box -> symmetric insets left/right;
+		   the dvh cap keeps room for the controls on short screens */
+        width: min(100%, 62dvh);
+        height: auto;
+        aspect-ratio: 1 / 1;
+    }
+
+    #controls {
+        position: static;
+        flex: 1;
+        min-height: 0;
+        max-height: none;
+        overflow-y: auto;
+    }
+
     .panel {
         width: 100%;
-        border-radius: 12px 12px 0 0;
+        min-height: 100%;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        border-bottom: none;
+        padding-bottom: calc(16px + env(safe-area-inset-bottom));
     }
-    .ca-canvas {
-        width: min(100vw - 16px, 64vh);
-        height: min(100vw - 16px, 64vh);
+
+    /* touch ergonomics: taller buttons, larger slider thumbs */
+    .btn {
+        padding: 11px 10px;
+        font-size: 12px;
+    }
+
+    .seg-btn {
+        padding: 10px 4px;
+    }
+
+    .slider::-webkit-slider-thumb {
+        width: 18px;
+        height: 18px;
+    }
+
+    .slider::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+    }
+
+    /* keyboard shortcuts don't apply on touch devices */
+    .hint-keys {
+        display: none;
     }
 }
