@@ -368,12 +368,42 @@ kbd {
     }
 }
 
-/* --- mobile ---------------------------------------------------------------
-   Below 600px the fixed-overlay layout stops working (the panel would cover
-   the canvas), so the page becomes a flex column: canvas on top, controls in
-   a scrollable region below. Desktop is untouched. */
+/* --- touch devices ---------------------------------------------------------
+   The fixed-overlay panel only works with a pointer + keyboard; on touch
+   devices (phones AND tablets) it covers the canvas. Touch is detected by
+   capability, not width — desktop keeps hover:hover at any window size and
+   is untouched. Orientation picks the layout: portrait stacks the panel
+   below the canvas, landscape docks it as a left sidebar. */
 
-@media (max-width: 600px) {
+/* touch ergonomics + no keyboard-shortcut hints, any touch device */
+@media (hover: none) and (pointer: coarse) {
+    .btn {
+        padding: 11px 10px;
+        font-size: 12px;
+    }
+
+    .seg-btn {
+        padding: 10px 4px;
+    }
+
+    .slider::-webkit-slider-thumb {
+        width: 18px;
+        height: 18px;
+    }
+
+    .slider::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+    }
+
+    .hint-keys {
+        display: none;
+    }
+}
+
+/* stacked column: narrow viewports + touch devices in portrait */
+@media (max-width: 600px),
+    ((hover: none) and (pointer: coarse) and (orientation: portrait)) {
     body {
         display: flex;
         flex-direction: column;
@@ -412,29 +442,44 @@ kbd {
         border-bottom: none;
         padding-bottom: calc(16px + env(safe-area-inset-bottom));
     }
+}
 
-    /* touch ergonomics: taller buttons, larger slider thumbs */
-    .btn {
-        padding: 11px 10px;
-        font-size: 12px;
+/* left sidebar: touch devices in landscape (tablets, landscape phones) */
+@media (min-width: 601px) and (hover: none) and (pointer: coarse) and (orientation: landscape) {
+    body {
+        display: flex;
+        flex-direction: row;
+        height: 100dvh;
+        overflow: hidden;
     }
 
-    .seg-btn {
-        padding: 10px 4px;
+    #controls {
+        position: static;
+        flex: none;
+        width: 280px;
+        max-height: none;
+        overflow-y: auto;
     }
 
-    .slider::-webkit-slider-thumb {
-        width: 18px;
-        height: 18px;
+    .panel {
+        width: 100%;
+        min-height: 100%;
+        border-radius: 0;
+        border-top: none;
+        border-left: none;
+        border-bottom: none;
+        padding-bottom: calc(16px + env(safe-area-inset-bottom));
     }
 
-    .slider::-moz-range-thumb {
-        width: 18px;
-        height: 18px;
+    #stage {
+        position: static;
+        flex: 1;
+        min-width: 0;
     }
 
-    /* keyboard shortcuts don't apply on touch devices */
-    .hint-keys {
-        display: none;
+    .ca-canvas {
+        width: min(100%, 86dvh);
+        height: auto;
+        aspect-ratio: 1 / 1;
     }
 }
