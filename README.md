@@ -62,15 +62,29 @@ yarn test         # verifies the engine is bit-exact vs the original sketch
 | Reset             | `x` or Reset — restore the original rule + defaults, then reseed                                          |
 | Seed              | `s` or Seed — lay down the first-frame seed pattern, keeping the current rule                             |
 | Clear stage       | `c` or Clear — empty the grid completely (draw your own)                                                  |
-| Download frame    | Download PNG — saves the current canvas as a PNG                                                          |
+| Download frame    | Download PNG — saves the current canvas as `ca-experiment-gen<N>-<hash>.png`                              |
 | Draw / erase cell | drag (or click) on the canvas                                                                             |
 | Pencil size       | slider, 1–48 cells (square brush, strokes interpolated)                                                   |
 | Draw / erase mode | Draw / Erase segmented toggle                                                                             |
-| Seed spacing      | slider (`distProbability`)                                                                                |
+| Seed spacing      | slider, 2–300 (`distProbability`)                                                                         |
 | Horizontal seed   | checkbox (`stripesB`)                                                                                     |
 | Speed             | slider, 0.1–8× — generations per frame (< 1 = slow motion)                                                |
+| Auto re-seed      | checkbox — re-seed patches that have dissolved into noise (experimental, off by default)                  |
+| Noise threshold   | slider, 0.50–1.00 — the patch entropy at which auto re-seed kicks in                                      |
 
 The **rule** readout shows the active algorithm as `<reference-direction arrow> <survival-threshold>` (e.g. `↖ 6`, the original). Randomize draws from a curated pool of 8 rules — the four diagonal reference directions (↖ ↗ ↙ ↘) at survival 6–7 — and never repeats the current rule; Reset returns to `↖ 6`.
+
+## Auto re-seed (experimental)
+
+Left alone, some rules eventually chew their weave into featureless pixel noise.
+The **Auto re-seed** toggle fights that: every 30 generations the grid is split
+into 75×75-cell patches and each is scored by the Shannon entropy of its 2×2
+block patterns, normalised to 0..1 (1 = all 16 patterns equally likely). Lattices
+reuse a handful of patterns and score low; noise approaches 1. Patches at or
+above the **Noise threshold** get re-seeded in place, so the pattern regenerates
+locally instead of decaying. The `entropy` readout shows the highest patch score
+from the last scan — useful for finding the threshold by eye, though it only
+moves while the toggle is on (the scan doesn't run otherwise).
 
 ## How it maps to the original
 
@@ -106,20 +120,22 @@ i.e. comfortably above 60 fps with headroom for multi-step speeds.
 - `@thi.ng/rstream-gestures` — pointer drawing
 - `@thi.ng/rdom` — declarative, reactively-bound control UI
 - `@thi.ng/transducers` — `map` / `dedupe` for derived streams
+- `@thi.ng/equiv` — value equality for those `dedupe`s (reference equality re-fires them)
 - `@thi.ng/pixel` — `ABGR8888` framebuffer + canvas blit
 
 ## Layout
 
 ```
 src/
-  ca.ts      typed-array engine (kernel, double buffer, framebuffer)  ← the fast core
-  state.ts   reactive atom + readout streams
-  app.ts     loop, gestures, keyboard, reactions, declarative rdom UI
-  main.ts    entry
-  style.css  instrument HUD
+  ca.ts       typed-array engine (kernel, double buffer, framebuffer)  ← the fast core
+  entropy.ts  patch entropy scan — noise detection behind auto re-seed
+  state.ts    reactive atom + readout streams
+  app.ts      loop, gestures, keyboard, reactions, declarative rdom UI
+  main.ts     entry
+  style.css   instrument HUD
 test/
-  verify.ts  bit-exact correctness check vs the original sketch
-  bench.ts   kernel benchmark
+  verify.ts   bit-exact correctness check vs the original sketch
+  bench.ts    kernel benchmark
 ```
 
 ## License
