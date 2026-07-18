@@ -45,8 +45,12 @@ body {
 }
 
 .ca-canvas {
-    width: min(100vmin - 24px, 88vh);
-    height: min(100vmin - 24px, 88vh);
+    /* width is bounded by both the horizontal and vertical space available;
+	   the vertical bounds are converted to a width via --ratio (COLS/ROWS,
+	   set in app.ts) so a non-square grid scales up *and* down to fill the
+	   stage instead of being capped at its native pixel size */
+    width: min(100vw - 24px, (100vh - 24px) * var(--ratio), 88vh * var(--ratio));
+    height: auto;
     image-rendering: pixelated;
     border: 1px solid var(--line-strong);
     box-shadow:
@@ -419,10 +423,10 @@ kbd {
 
     .ca-canvas {
         /* 100% of the stage's content box -> symmetric insets left/right;
-		   the dvh cap keeps room for the controls on short screens */
-        width: min(100%, 62dvh);
+		   the dvh term (converted to a width via --ratio) keeps room for the
+		   controls on short screens while still letting the canvas grow. */
+        width: min(100%, 62dvh * var(--ratio));
         height: auto;
-        aspect-ratio: 1 / 1;
     }
 
     #controls {
@@ -478,8 +482,7 @@ kbd {
     }
 
     .ca-canvas {
-        width: min(100%, 86dvh);
+        width: min(100%, 86dvh * var(--ratio));
         height: auto;
-        aspect-ratio: 1 / 1;
     }
 }

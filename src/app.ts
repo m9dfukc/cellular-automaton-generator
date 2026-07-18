@@ -73,6 +73,12 @@ const canvas = document.createElement("canvas");
 canvas.width = COLS;
 canvas.height = ROWS;
 canvas.className = "ca-canvas";
+// Exposed as a plain number so the CSS sizing formula (style.css) can scale
+// the canvas up or down to fill the stage while keeping this exact ratio —
+// CSS can derive height from width via the canvas's own intrinsic size, but
+// has no way to do the reverse (bound width by an available height) without
+// the ratio as a usable calc() operand.
+canvas.style.setProperty("--ratio", String(COLS / ROWS));
 const ctx = canvas.getContext("2d", { alpha: false })!;
 ctx.imageSmoothingEnabled = false;
 // replaceChildren rather than appendChild: init owns the stage, so a hot
