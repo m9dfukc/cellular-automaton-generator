@@ -18,8 +18,10 @@ jobs:
     build:
         runs-on: ubuntu-latest
         steps:
+            # --- main site → dist/ ---
             - uses: actions/checkout@v4
               with:
+                  ref: main
                   lfs: true
 
             - uses: actions/setup-node@v4
@@ -30,6 +32,25 @@ jobs:
             - run: yarn install --frozen-lockfile
 
             - run: yarn build
+
+            # --- audio-synthesis POC → dist/poc/ (experimental) ---
+            # Single-file build inlines everything into one index.html, so it is
+            # base-path agnostic and works from the /poc/ subfolder unchanged.
+            - uses: actions/checkout@v4
+              with:
+                  ref: poc-audio-synthesis
+                  path: poc
+                  lfs: true
+
+            - run: yarn install --frozen-lockfile
+              working-directory: poc
+
+            - run: yarn build:single
+              working-directory: poc
+
+            - run: |
+                  mkdir -p dist/poc
+                  cp poc/dist/index.html dist/poc/index.html
 
             - uses: actions/upload-pages-artifact@v3
               with:

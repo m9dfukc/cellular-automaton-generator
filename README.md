@@ -8,6 +8,8 @@ kernel, because that's where the speed actually lives.
 
 **[▶︎ Run it live](https://m9dfukc.github.io/cellular-automaton-generator/)** — drag to draw · press `r` for a new rule · **Download PNG** to keep a frame
 
+**[🔊 Audio POC (experimental)](https://m9dfukc.github.io/cellular-automaton-generator/poc/)** — the same automaton, sonified: press `a` for sound, size the region to set pitch. Rough proof of concept — see [Audio POC](#audio-poc-experimental) below.
+
 <img src="docs/assets/application.webp" width="820"
      alt="The applet running in the browser: a dark instrument HUD on the left, a blue/black/white cellular-automaton pattern filling the canvas on the right" />
 
@@ -137,6 +139,56 @@ test/
   verify.ts   bit-exact correctness check vs the original sketch
   bench.ts    kernel benchmark
 ```
+
+## Audio POC (experimental)
+
+> **Proof of concept, not a finished feature.** This lives on the
+> `poc-audio-synthesis` branch and is deployed separately at
+> [/poc/](https://m9dfukc.github.io/cellular-automaton-generator/poc/). It is a
+> rough, work-in-progress sketch — expect sharp edges, loud transients, and
+> design decisions still in flux. The main app above is unaffected.
+
+The POC sonifies the automaton: a rectangular **region** of the grid is
+raster-scanned into a wavetable (alive → +, dead → −) that a read phasor loops,
+so **you literally hear the pattern as a waveform**. Region size sets the pitch;
+the CA's evolution morphs the timbre. Two coupled instances share one master
+tempo, so the image advances on the beat.
+
+**Turn your speakers down before pressing `a`.**
+
+### Quick start
+
+1. Press **`a`** (or the **Audio** button) to start sound — a browser gesture is
+   required to open the audio context, so it only starts on that keypress/click.
+2. Use the **Region size (pitch)** presets (16 / 32 / 64 / 128) to pick a pitch;
+   smaller region = shorter wavetable = higher note.
+3. **Run** (`space`) to hear the sound morph as the CA evolves; **pause** to
+   freeze it into a steady drone of the current frame.
+
+### Audio controls
+
+| Control             | What it does                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| `a` / Audio button  | Toggle sound on/off (starts/stops the audio context)                                           |
+| Volume              | Output level, in dB                                                                            |
+| Tempo (BPM)         | Master tempo — drives how fast the CA steps                                                    |
+| Visual subdivision  | Steps per beat = the live **morph rate** of the timbre                                         |
+| Region size (pitch) | Preset squares 16–128 cells; **Alt-drag** moves the region, **Shift-drag** boxes it to any W×H |
+| Width / Diffusion   | Stereo width and allpass decorrelation of the two channels                                     |
+| Wave strip          | Live view of the current wavetable / output waveform                                           |
+
+### How run / pause / step behave with audio on
+
+- **Running = live mirror.** The visual CA drives and the region is mirrored into
+  the audio engine every generation, so the sound morphs at the tempo grid's rate.
+- **Paused = frozen drone.** No new frames arrive, so the last wavetable just
+  loops — a steady drone of the frozen picture.
+- **Step (`n`, while paused) = re-seed the drone.** Each step advances the frozen
+  frame once and pushes it, so the drone jumps to the new frame — scrub it by hand.
+
+Rule (`r` randomize) and tempo are always live, so they are audible without a
+re-capture. Design rationale for all of this lives in the branch's
+`docs/adr/0001`–`0005`.
 
 ## License
 
