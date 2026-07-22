@@ -1,5 +1,12 @@
 # Sonification maps the region to a live-rewritten raster-scan wavetable
 
+> **Amended by ADR 0005.** The raster-scan wavetable and **Region size = pitch**
+> stand. What is retired: "Tempo/`N` sets timbre morph" via an audio-clock CA —
+> the worklet no longer steps a CA, so it does not rewrite the table itself.
+> The table is now rewritten only by the frames the Visual CA mirrors in (live)
+> and holds still when paused. Read this ADR for the wavetable/pitch model; read
+> ADR 0005 for who rewrites the table.
+
 The Sounding CA becomes audio by raster-scanning its region into a **wavetable** — each cell contributes one sample (alive → +g, dead → −g) — which a read phasor loops. The Sounding CA rewrites this table as it evolves, every `N` output samples (`N` derived from the tempo grid, ADR 0001).
 
 Two sonic axes fall out cleanly and orthogonally:

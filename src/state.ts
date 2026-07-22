@@ -8,8 +8,6 @@ export interface AppState {
     dist: number;
     /** horizontal-only seeding ("stripesB") */
     stripes: boolean;
-    /** generations advanced per displayed frame (fractional = slow motion) */
-    speed: number;
     /** rule: reference-neighbour direction 0..7 (0 = top-left, the original) */
     refDir: number;
     /** rule: survival threshold (original = 6) */
@@ -22,6 +20,29 @@ export interface AppState {
     brush: number;
     /** edit tool: paint live cells ("draw") or clear them ("erase") */
     tool: "draw" | "erase";
+
+    // --- audio extension (all excluded from DEFAULTS — Reset never touches
+    // tempo/audio, ADR 0004). This is *instrument* state, not *simulation*
+    // state.
+    /** master AudioContext running (the `a` key toggles it) */
+    audioOn: boolean;
+    /** output volume in dB (−18 = §3 conservative default) */
+    volume: number;
+    /** master tempo, beats per minute (ADR 0001) */
+    bpm: number;
+    /**
+     * visual CA subdivision — generations per beat. Coarse: down to
+     * multi-bar-per-generation slow motion (replaces the old `speed` slider).
+     * genPerSec = bpm/60 * visualSubdivision (ADR 0001, Risk 3). While audio is
+     * on and running, this also sets the audible morph rate (ADR 0005).
+     */
+    visualSubdivision: number;
+    /** Region side in cells — sets pitch (2^n for clean periods; ADR 0002) */
+    regionSize: number;
+    /** Region centre X, normalised 0..1 across the grid (Alt-click moves it) */
+    regionX: number;
+    /** Region centre Y, normalised 0..1 across the grid */
+    regionY: number;
 }
 
 /**
@@ -32,7 +53,6 @@ export const DEFAULTS: Pick<
     AppState,
     | "dist"
     | "stripes"
-    | "speed"
     | "refDir"
     | "survival"
     | "autoReseed"
@@ -40,7 +60,6 @@ export const DEFAULTS: Pick<
 > = {
     dist: 100,
     stripes: false,
-    speed: 1,
     refDir: 0,
     survival: 6,
     autoReseed: false,
@@ -52,6 +71,14 @@ export const db = defAtom<AppState>({
     running: true,
     brush: 1,
     tool: "draw",
+    // Audio/tempo — instrument state, intentionally outside DEFAULTS (ADR 0004).
+    audioOn: false,
+    volume: -18,
+    bpm: 120,
+    visualSubdivision: 4,
+    regionSize: 64,
+    regionX: 0.5,
+    regionY: 0.5,
 });
 
 // High-frequency readouts are kept *out* of the config atom so 60 Hz updates
@@ -67,3 +94,12 @@ export const gen$ = reactive(0, { closeOut: "never" });
 export const fps$ = reactive(0, { closeOut: "never" });
 /** max patch entropy from the latest scan (0 until the first scan runs) */
 export const entropy$ = reactive(0, { closeOut: "never" });
+
+// Audio readouts posted by the worklet (~15 Hz) — kept out of the atom, same
+// reasoning as gen$/fps$: 15 Hz churn must not refire config reactions.
+/** decimated snapshot of the sounding wavetable, for the waveform strip */
+export const wave$ = reactive<Float32Array>(new Float32Array(0), {
+    closeOut: "never",
+});
+/** output level (0..1), for the level meter */
+export const level$ = reactive(0, { closeOut: "never" });

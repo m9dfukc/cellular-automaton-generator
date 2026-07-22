@@ -44,6 +44,26 @@ body {
     );
 }
 
+/* Shrink-wraps the canvas so the Region frame can be positioned in % of it. */
+.stage-inner {
+    position: relative;
+    display: inline-flex;
+    line-height: 0;
+}
+
+/* Blue Region frame (ADR 0002) — a DOM overlay, never composited into the CA
+   canvas (which is blitted whole each frame). Hidden until audio is on. */
+.region-frame {
+    position: absolute;
+    display: none;
+    box-sizing: border-box;
+    border: 1px solid #3b3bff;
+    box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.5),
+        0 0 12px -2px #3b3bff;
+    pointer-events: none;
+}
+
 .ca-canvas {
     /* width is bounded by both the horizontal and vertical space available;
 	   the vertical bounds are converted to a width via --ratio (COLS/ROWS,
@@ -337,6 +357,25 @@ body {
     font-size: 16px;
     color: var(--blue-bright);
     font-variant-numeric: tabular-nums;
+}
+
+/* audio section */
+
+.audio {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+}
+
+.wave-strip {
+    width: 100%;
+    height: 44px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    image-rendering: pixelated;
 }
 
 /* hint */

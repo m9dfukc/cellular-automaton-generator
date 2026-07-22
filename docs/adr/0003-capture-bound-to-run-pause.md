@@ -1,5 +1,11 @@
 # Grid capture is bound to Run/Pause, not a dedicated control
 
+> **Superseded in part by ADR 0005.** The Run/Pause binding stands, but Pause no
+> longer detaches an autonomous audio-rate CA — it now freezes a **static drone**
+> of the current buffer. "Running = live mirror" and "Step = re-seed" are intact;
+> "Paused = autonomous" is retired (with it, the sounding subdivision and the
+> worklet CA core). See ADR 0005.
+
 The live↔one-shot distinction (ADR context: who drives the Sounding grid) is bound to the existing **Run/Pause** state rather than a new toggle, and the Capture gesture is bound to **Pause** rather than a new button:
 
 - **Running = live mirror.** The Visual CA drives; the worklet mirrors the Region every generation. Sound morphs at draw rate, fully congruent — you hear exactly what you see.
