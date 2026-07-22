@@ -45,3 +45,6 @@ Thumbs.db
 CLAUDE.md
 CONTEXT.md
 docs/agents/
+
+# transient handoffs (per-session, not versioned)
+docs/handoffs/
