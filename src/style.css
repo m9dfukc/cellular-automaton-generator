@@ -207,6 +207,11 @@ body {
     margin-top: 9px;
 }
 
+/* the region-size selector is a 1-D scale (16→128) — one row of four */
+.seg-sizes {
+    grid-template-columns: repeat(4, 1fr);
+}
+
 .seg-btn {
     font-family: inherit;
     font-size: 11px;

@@ -483,16 +483,17 @@ const gestureSub = gestureStream(canvas, { local: true }).subscribe({
     next(e) {
         // Alt+pointer places the Region center and never draws (Risk 4, ADR
         // 0002). The gesture carries the original DOM event, so altKey is here.
+        // Updating on start *and* drag lets you glide the Region across the
+        // canvas, scrubbing what the buffer reads.
         const alt = (e.event as PointerEvent).altKey === true;
         if (e.type === "start" || e.type === "drag") {
             const [px, py] = e.pos;
             if (alt) {
-                if (e.type === "start")
-                    db.swap((s) => ({
-                        ...s,
-                        regionX: Math.min(1, Math.max(0, px / canvas.clientWidth)),
-                        regionY: Math.min(1, Math.max(0, py / canvas.clientHeight)),
-                    }));
+                db.swap((s) => ({
+                    ...s,
+                    regionX: Math.min(1, Math.max(0, px / canvas.clientWidth)),
+                    regionY: Math.min(1, Math.max(0, py / canvas.clientHeight)),
+                }));
                 return;
             }
             const gx = ((px / canvas.clientWidth) * ca.cols) | 0;
@@ -820,9 +821,9 @@ const panel = [
                 ["span.field-value", {}, "Alt-click to move"],
             ],
             [
-                "div.seg",
+                "div.seg.seg-sizes",
                 {},
-                ...[32, 64, 128].map((n) => [
+                ...[16, 32, 64, 128].map((n) => [
                     "button.seg-btn",
                     {
                         type: "button",
