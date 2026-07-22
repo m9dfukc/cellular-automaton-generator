@@ -12,9 +12,11 @@ export interface AppState {
     refDir: number;
     /** rule: survival threshold (original = 6) */
     survival: number;
-    /** POC: re-seed patches whose local block entropy exceeds the threshold */
-    autoReseed: boolean;
-    /** normalised patch-entropy threshold (0..1) for the auto reseed */
+    /**
+     * normalised patch-entropy threshold (0..1) for the auto reseed. Patches
+     * whose local block entropy is >= this get re-seeded. 1 = off (the ceiling
+     * is 1, so nothing ever qualifies and the scan is skipped entirely).
+     */
     entropyThreshold: number;
     /** pencil size in cells (edit tool, not part of the simulation) */
     brush: number;
@@ -73,22 +75,21 @@ export const DEFAULTS: Pick<
     | "stripes"
     | "refDir"
     | "survival"
-    | "autoReseed"
     | "entropyThreshold"
 > = {
     dist: 100,
     stripes: false,
     refDir: 0,
     survival: 6,
-    autoReseed: false,
-    entropyThreshold: 0.9,
+    // 1 = off by default (see AppState.entropyThreshold).
+    entropyThreshold: 1,
 };
 
 export const db = defAtom<AppState>({
     ...DEFAULTS,
     running: true,
     brush: 1,
-    tool: "draw",
+    tool: "erase",
     // Audio/tempo — instrument state, intentionally outside DEFAULTS (ADR 0004).
     audioOn: false,
     volume: -18,
@@ -96,8 +97,8 @@ export const db = defAtom<AppState>({
     diffusion: 0.3,
     bpm: 120,
     visualSubdivision: 4,
-    regionW: 64,
-    regionH: 64,
+    regionW: 32,
+    regionH: 32,
     regionX: 0.5,
     regionY: 0.5,
 });

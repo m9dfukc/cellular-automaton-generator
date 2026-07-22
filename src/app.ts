@@ -200,40 +200,10 @@ const stepForward = () => {
     ca.process(); // advance the grid one generation (no draw)
     ca.render(); // colour the new current grid (same formula as step())
     ca.blit(ctx);
-    displayGen = ca.generation;
     gen$.next(ca.generation);
     // Step pushes the newly-stepped frozen frame — the drone jumps to it, so
     // you scrub the seed by hand (ADR 0003/0005).
     if (engine.running) engine.pushSeed(extractRegion());
-};
-
-/**
- * FNV-1a over the framebuffer — a short content tag for the filename, so two
- * frames caught at the same generation under different rules don't collide.
- * Hashes the pixels, not the grid: while running, `step()` draws the pre-step
- * frame and leaves `grid` a generation ahead of the canvas, so only the
- * framebuffer is guaranteed to match the PNG.
- */
-const frameHash = () => {
-    const px = ca.img.data;
-    let h = 0x811c9dc5;
-    for (let i = 0; i < px.length; i++) h = Math.imul(h ^ px[i], 0x01000193);
-    return (h >>> 0).toString(16).padStart(8, "0").slice(0, 6);
-};
-
-/** Download the current canvas frame as a PNG (captures exactly what's shown). */
-const downloadPNG = () => {
-    canvas.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `ca-experiment-gen${displayGen}-${frameHash()}.png`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-    }, "image/png");
 };
 
 // --- the loop --------------------------------------------------------------
@@ -249,7 +219,6 @@ let lastT = 0;
 let frames = 0;
 let acc = 0;
 let stepAcc = 0;
-let displayGen = 0; // generation currently shown on the canvas
 let lastScanGen = 0; // generation of the last entropy scan (POC)
 
 const rafSub = fromRAF({ timestamp: true, t0: true }).subscribe({
@@ -268,7 +237,6 @@ const rafSub = fromRAF({ timestamp: true, t0: true }).subscribe({
                 ca.step(); // advance #1 + draw pre-step state (fused, 1 pass)
                 for (let k = 1; k < steps; k++) ca.process(); // extra sub-steps
                 ca.blit(ctx);
-                displayGen = shown;
                 gen$.next(shown);
                 // Running = live: mirror the visible Region into the worklet
                 // every generation (ADR 0003/0005). ~16 KB/gen @ 60 Hz — budgeted.
@@ -278,7 +246,9 @@ const rafSub = fromRAF({ timestamp: true, t0: true }).subscribe({
             // steps === 0 -> slow motion: hold the last frame, advance nothing
 
             // POC: periodically scan patches for noise, re-seed the noisy ones.
-            if (st.autoReseed) {
+            // Threshold 1 = off: the entropy ceiling is 1, so nothing qualifies
+            // and there is no point scanning.
+            if (st.entropyThreshold < 1) {
                 if (ca.generation < lastScanGen) lastScanGen = 0; // counter was reset
                 if (ca.generation - lastScanGen >= CHECK_INTERVAL) {
                     lastScanGen = ca.generation;
@@ -302,7 +272,6 @@ const rafSub = fromRAF({ timestamp: true, t0: true }).subscribe({
             ca.render();
             ca.blit(ctx);
             dirty = false;
-            displayGen = ca.generation;
             gen$.next(ca.generation);
         }
 
@@ -363,7 +332,6 @@ const pauseSub = fromAtom(db)
             ca.render();
             ca.blit(ctx);
             dirty = false;
-            displayGen = ca.generation;
             gen$.next(ca.generation);
             // Pause *is* the Capture (ADR 0003/0005): push the frozen frame we
             // just reconciled, then stop — the worklet loops it as a drone.
@@ -564,13 +532,12 @@ const field$ = <T>(f: (s: AppState) => T) =>
 
 const running$ = field$((s) => s.running);
 const dist$ = field$((s) => s.dist);
-const stripes$ = field$((s) => s.stripes);
-const autoReseed$ = field$((s) => s.autoReseed);
+// Horizontal seeding (`stripes`) still works via the atom + `seedSub` reaction;
+// its GUI toggle is commented out below.
+// const stripes$ = field$((s) => s.stripes);
 const threshold$ = field$((s) => s.entropyThreshold);
 const rule$ = field$((s) => `${DIR_ARROWS[s.refDir]} ${s.survival}`);
 const brush$ = field$((s) => s.brush);
-const drawPressed$ = field$((s) => (s.tool === "draw" ? "true" : "false"));
-const erasePressed$ = field$((s) => (s.tool === "erase" ? "true" : "false"));
 
 // Audio / tempo fields.
 const audioOn$ = field$((s) => s.audioOn);
@@ -633,7 +600,6 @@ const panel = [
         ["button.btn", { onclick: reset }, "Reset"],
         ["button.btn", { onclick: reseed }, "Seed"],
         ["button.btn", { onclick: wipe }, "Clear"],
-        ["button.btn.btn-wide", { onclick: downloadPNG }, "Download PNG"],
     ],
 
     [
@@ -723,73 +689,39 @@ const panel = [
                 oninput: (e: Event) => db.resetIn(["brush"], num(e)),
             },
         ],
-        [
-            "div.seg",
-            {},
-            [
-                "button.seg-btn",
-                {
-                    type: "button",
-                    "aria-pressed": drawPressed$,
-                    onclick: () => db.resetIn(["tool"], "draw"),
-                },
-                "Draw",
-            ],
-            [
-                "button.seg-btn",
-                {
-                    type: "button",
-                    "aria-pressed": erasePressed$,
-                    onclick: () => db.resetIn(["tool"], "erase"),
-                },
-                "Erase",
-            ],
-        ],
+        // Draw/Erase mode toggle removed — Erase is the default (state.ts). The
+        // `tool` field still supports "draw"; nothing in the UI sets it now.
     ],
 
-    [
-        "label.toggle",
-        {},
-        [
-            "input",
-            {
-                type: "checkbox",
-                checked: stripes$,
-                onchange: (e: Event) =>
-                    db.resetIn(
-                        ["stripes"],
-                        (e.target as HTMLInputElement).checked,
-                    ),
-            },
-        ],
-        ["span", {}, "Horizontal seeding"],
-    ],
-
-    [
-        "label.toggle",
-        {},
-        [
-            "input",
-            {
-                type: "checkbox",
-                checked: autoReseed$,
-                onchange: (e: Event) =>
-                    db.resetIn(
-                        ["autoReseed"],
-                        (e.target as HTMLInputElement).checked,
-                    ),
-            },
-        ],
-        ["span", {}, "Auto re-seed noisy patches"],
-    ],
+    // Horizontal-seeding toggle removed from the GUI — the `stripes` field and
+    // its `seedSub` reaction are intact, so it can be re-enabled here later.
+    // [
+    //     "label.toggle",
+    //     {},
+    //     [
+    //         "input",
+    //         {
+    //             type: "checkbox",
+    //             checked: stripes$,
+    //             onchange: (e: Event) =>
+    //                 db.resetIn(
+    //                     ["stripes"],
+    //                     (e.target as HTMLInputElement).checked,
+    //                 ),
+    //         },
+    //     ],
+    //     ["span", {}, "Horizontal seeding"],
+    // ],
 
     [
         "div.field",
-        {},
+        {
+            title: "Re-seed patches whose block-noise reaches this level. 1.00 = off (never re-seed); lower = re-seed noisier patches.",
+        },
         [
             "div.field-head",
             {},
-            ["span.field-label", {}, "Noise threshold"],
+            ["span.field-label", {}, "Auto re-seed threshold"],
             ["span.field-value", {}, thresholdText$],
         ],
         [
@@ -963,7 +895,7 @@ const panel = [
             ["kbd", {}, "a"],
             " audio · ",
         ],
-        "drag to draw · Alt-drag to move the audio region · Shift-drag to size it",
+        "drag to erase · Alt-drag to move the audio region · Shift-drag to size it",
     ],
 ];
 
