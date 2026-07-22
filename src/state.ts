@@ -34,6 +34,12 @@ export interface AppState {
      * decorrelation. Pure phase spread — no pitch change.
      */
     width: number;
+    /**
+     * decorrelation diffusion (0..1): dry/wet of a per-channel Schroeder-allpass
+     * chain (different delays L vs R). Diffuse, frequency-dependent phase spread
+     * that survives mono-summing better than the raw `width` offset comb.
+     */
+    diffusion: number;
     /** master tempo, beats per minute (ADR 0001) */
     bpm: number;
     /**
@@ -87,6 +93,7 @@ export const db = defAtom<AppState>({
     audioOn: false,
     volume: -18,
     width: 0.5,
+    diffusion: 0.3,
     bpm: 120,
     visualSubdivision: 4,
     regionW: 64,

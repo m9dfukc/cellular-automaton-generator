@@ -38,6 +38,17 @@ class WavetablePlayer extends AudioWorkletProcessor {
         this.dcX1R = 0;
         this.dcY1R = 0;
 
+        // Decorrelation diffuser (option C): a 2-stage Schroeder allpass per
+        // channel with different (coprime-ish) delays L vs R, crossfaded dry/wet
+        // by `diffuse`. Allpass = flat magnitude, so it widens without colour,
+        // and its frequency-dependent phase breaks up the raw-offset mono comb.
+        this.apG = 0.6;
+        this.diffuse = 0;
+        const apD = [179, 421, 233, 487]; // samples: L1 L2 R1 R2
+        this.apLen = apD;
+        this.apBuf = apD.map((d) => new Float32Array(d));
+        this.apIdx = [0, 0, 0, 0];
+
         // gain ramp (~10 ms one-pole toward target); start silent to avoid click
         this.gain = 0;
         this.targetGain = 0;
@@ -96,6 +107,7 @@ class WavetablePlayer extends AudioWorkletProcessor {
                     this.widthFrac = m.width;
                     this.updateOffset();
                 }
+                if (m.diffusion != null) this.diffuse = m.diffusion;
                 break;
         }
     }
@@ -115,6 +127,15 @@ class WavetablePlayer extends AudioWorkletProcessor {
         let y1R = this.dcY1R;
         let gain = this.gain;
         let level = this.level;
+        // diffuser locals (buffers + write indices + delays)
+        const apG = this.apG;
+        const diffuse = this.diffuse;
+        const [b0, b1, b2, b3] = this.apBuf;
+        const [D0, D1, D2, D3] = this.apLen;
+        let i0 = this.apIdx[0];
+        let i1 = this.apIdx[1];
+        let i2 = this.apIdx[2];
+        let i3 = this.apIdx[3];
 
         for (let s = 0; s < frames; s++) {
             const rawL = table[readIdx];
@@ -130,10 +151,38 @@ class WavetablePlayer extends AudioWorkletProcessor {
             x1R = rawR;
             y1R = dcRch;
 
+            // decorrelation diffuser: 2 Schroeder allpasses per channel,
+            // crossfaded dry/wet by `diffuse` (0 = bypass → just the offset).
+            let apL = dcL;
+            let d = b0[i0];
+            let w = apL + apG * d;
+            apL = -apG * w + d;
+            b0[i0] = w;
+            if (++i0 >= D0) i0 = 0;
+            d = b1[i1];
+            w = apL + apG * d;
+            apL = -apG * w + d;
+            b1[i1] = w;
+            if (++i1 >= D1) i1 = 0;
+            const outL = dcL + (apL - dcL) * diffuse;
+
+            let apR = dcRch;
+            d = b2[i2];
+            w = apR + apG * d;
+            apR = -apG * w + d;
+            b2[i2] = w;
+            if (++i2 >= D2) i2 = 0;
+            d = b3[i3];
+            w = apR + apG * d;
+            apR = -apG * w + d;
+            b3[i3] = w;
+            if (++i3 >= D3) i3 = 0;
+            const outR = dcRch + (apR - dcRch) * diffuse;
+
             // soft clip, then gain ramp (research §4 order)
             gain += (this.targetGain - gain) * gainCoeff;
-            const yL = Math.tanh(dcL) * gain;
-            const yR = Math.tanh(dcRch) * gain;
+            const yL = Math.tanh(outL) * gain;
+            const yR = Math.tanh(outR) * gain;
 
             const aL = yL < 0 ? -yL : yL;
             const aR = yR < 0 ? -yR : yR;
@@ -154,6 +203,10 @@ class WavetablePlayer extends AudioWorkletProcessor {
         this.dcX1R = x1R;
         this.dcY1R = y1R;
         this.gain = gain;
+        this.apIdx[0] = i0;
+        this.apIdx[1] = i1;
+        this.apIdx[2] = i2;
+        this.apIdx[3] = i3;
 
         // periodic waveform + level snapshot to the main thread (~15 Hz)
         this.waveCounter += frames;

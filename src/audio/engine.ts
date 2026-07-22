@@ -17,7 +17,12 @@ export class AudioEngine {
     /** Start the context + graph. The call must originate from a user gesture
      * (the `a` keypress) so `resume()` is allowed by the autoplay policy. The
      * `seed`'s byte length is the initial table length (one cell = one sample). */
-    async start(volume: number, width: number, seed: ArrayBuffer): Promise<void> {
+    async start(
+        volume: number,
+        width: number,
+        diffusion: number,
+        seed: ArrayBuffer,
+    ): Promise<void> {
         const ctx = new AudioContext();
         this.ctx = ctx;
 
@@ -62,16 +67,17 @@ export class AudioEngine {
         this.running = true;
         // seed first so the table isn't silent, then enable the gain
         node.port.postMessage({ type: "seed", grid: seed }, [seed]);
-        this.setConfig(volume, width);
+        this.setConfig(volume, width, diffusion);
         await ctx.resume(); // inside the `a` gesture
     }
 
-    setConfig(volume: number, width: number): void {
+    setConfig(volume: number, width: number, diffusion: number): void {
         if (!this.node) return;
         this.node.port.postMessage({
             type: "config",
             volume,
             width,
+            diffusion,
             enabled: true,
         });
     }

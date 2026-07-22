@@ -387,7 +387,12 @@ const audioSub = fromAtom(db)
         next(on) {
             if (on) {
                 engine
-                    .start(db.deref().volume, db.deref().width, extractRegion())
+                    .start(
+                        db.deref().volume,
+                        db.deref().width,
+                        db.deref().diffusion,
+                        extractRegion(),
+                    )
                     .catch((err) => {
                         console.error("[audio] start failed", err);
                         engine.stop();
@@ -399,16 +404,16 @@ const audioSub = fromAtom(db)
         },
     });
 
-// Volume + stereo width are the live audio parameters (ADR 0005 — the worklet
-// is a wavetable player; rule/tempo shape the sound only via the visual frames).
+// Volume + stereo width + diffusion are the live audio parameters (ADR 0005 —
+// the worklet is a wavetable player; rule/tempo shape sound via visual frames).
 const audioCfgSub = fromAtom(db)
     .transform(
-        map((s: AppState) => [s.volume, s.width] as const),
+        map((s: AppState) => [s.volume, s.width, s.diffusion] as const),
         dedupe(equiv),
     )
     .subscribe({
-        next([volume, width]) {
-            if (engine.running) engine.setConfig(volume, width);
+        next([volume, width, diffusion]) {
+            if (engine.running) engine.setConfig(volume, width, diffusion);
         },
     });
 
@@ -573,6 +578,7 @@ const bpm$ = field$((s) => s.bpm);
 const visSub$ = field$((s) => s.visualSubdivision);
 const volume$ = field$((s) => s.volume);
 const width$ = field$((s) => s.width);
+const diffusion$ = field$((s) => s.diffusion);
 // A size preset is "pressed" only when the Region is that exact square (a
 // Shift-drag rectangle un-presses all of them).
 const sizePressed$ = (n: number) =>
@@ -589,6 +595,9 @@ const bpmText$ = bpm$.transform(map((b) => `${b | 0}`));
 const visSubText$ = visSub$.transform(map((v) => `${v.toFixed(2)}/beat`));
 const volumeText$ = volume$.transform(map((v) => `${v | 0} dB`));
 const widthText$ = width$.transform(map((w) => `${Math.round(w * 100)}%`));
+const diffusionText$ = diffusion$.transform(
+    map((d) => `${Math.round(d * 100)}%`),
+);
 
 const num = (e: Event) => (e.target as HTMLInputElement).valueAsNumber;
 
@@ -851,6 +860,27 @@ const panel = [
                     step: 0.01,
                     value: width$,
                     oninput: (e: Event) => db.resetIn(["width"], num(e)),
+                },
+            ],
+        ],
+        [
+            "div.field",
+            {},
+            [
+                "div.field-head",
+                {},
+                ["span.field-label", {}, "Diffusion"],
+                ["span.field-value", {}, diffusionText$],
+            ],
+            [
+                "input.slider",
+                {
+                    type: "range",
+                    min: 0,
+                    max: 1,
+                    step: 0.01,
+                    value: diffusion$,
+                    oninput: (e: Event) => db.resetIn(["diffusion"], num(e)),
                 },
             ],
         ],
