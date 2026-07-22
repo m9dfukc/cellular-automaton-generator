@@ -15,7 +15,7 @@ import {
     level$,
     wave$,
 } from "./state.js";
-import { AudioEngine, type AudioConfig } from "./audio/engine.js";
+import { AudioEngine } from "./audio/engine.js";
 
 const COLS = 600;
 const ROWS = 600;
@@ -118,28 +118,25 @@ const markDirty = () => {
 
 const engine = new AudioEngine();
 
-const audioCfg = (s: AppState): AudioConfig => ({
-    volume: s.volume,
-    regionSize: s.regionSize,
-});
-
 /**
  * Copy the current Region out of the CA grid into a fresh row-major
- * `Uint8Array` (whose buffer is transferred to the worklet). Center is
- * normalised (`regionX/Y`); the top-left is clamped so the square always fits.
+ * `Uint8Array` (whose buffer is transferred to the worklet). Reads the W×H
+ * rectangle row after row — that raster order is the sample order. Center is
+ * normalised (`regionX/Y`); the top-left is clamped so the rectangle fits.
  */
 const extractRegion = (): ArrayBuffer => {
     const s = db.deref();
-    const size = s.regionSize;
+    const w = s.regionW;
+    const h = s.regionH;
     const cx = Math.round(s.regionX * COLS);
     const cy = Math.round(s.regionY * ROWS);
-    const x0 = Math.max(0, Math.min(COLS - size, cx - (size >> 1)));
-    const y0 = Math.max(0, Math.min(ROWS - size, cy - (size >> 1)));
-    const out = new Uint8Array(size * size);
+    const x0 = Math.max(0, Math.min(COLS - w, cx - (w >> 1)));
+    const y0 = Math.max(0, Math.min(ROWS - h, cy - (h >> 1)));
+    const out = new Uint8Array(w * h);
     const g = ca.grid;
-    for (let r = 0; r < size; r++) {
+    for (let r = 0; r < h; r++) {
         const src = (y0 + r) * COLS + x0;
-        out.set(g.subarray(src, src + size), r * size);
+        out.set(g.subarray(src, src + w), r * w);
     }
     return out.buffer;
 };
@@ -147,8 +144,8 @@ const extractRegion = (): ArrayBuffer => {
 /** Position the blue Region frame over the canvas (% of the canvas rect). */
 const positionRegion = () => {
     const s = db.deref();
-    const wN = s.regionSize / COLS;
-    const hN = s.regionSize / ROWS;
+    const wN = s.regionW / COLS;
+    const hN = s.regionH / ROWS;
     const cx = Math.min(1 - wN / 2, Math.max(wN / 2, s.regionX));
     const cy = Math.min(1 - hN / 2, Math.max(hN / 2, s.regionY));
     regionEl.style.left = `${(cx - wN / 2) * 100}%`;
@@ -207,7 +204,7 @@ const stepForward = () => {
     gen$.next(ca.generation);
     // Step pushes the newly-stepped frozen frame — the drone jumps to it, so
     // you scrub the seed by hand (ADR 0003/0005).
-    if (engine.running) engine.pushSeed(extractRegion(), db.deref().regionSize);
+    if (engine.running) engine.pushSeed(extractRegion());
 };
 
 /**
@@ -276,7 +273,7 @@ const rafSub = fromRAF({ timestamp: true, t0: true }).subscribe({
                 // Running = live: mirror the visible Region into the worklet
                 // every generation (ADR 0003/0005). ~16 KB/gen @ 60 Hz — budgeted.
                 if (engine.running)
-                    engine.pushSeed(extractRegion(), st.regionSize);
+                    engine.pushSeed(extractRegion());
             }
             // steps === 0 -> slow motion: hold the last frame, advance nothing
 
@@ -370,7 +367,7 @@ const pauseSub = fromAtom(db)
             gen$.next(ca.generation);
             // Pause *is* the Capture (ADR 0003/0005): push the frozen frame we
             // just reconciled, then stop — the worklet loops it as a drone.
-            if (engine.running) engine.pushSeed(extractRegion(), db.deref().regionSize);
+            if (engine.running) engine.pushSeed(extractRegion());
         },
     });
 
@@ -390,7 +387,7 @@ const audioSub = fromAtom(db)
         next(on) {
             if (on) {
                 engine
-                    .start(audioCfg(db.deref()), extractRegion())
+                    .start(db.deref().volume, db.deref().width, extractRegion())
                     .catch((err) => {
                         console.error("[audio] start failed", err);
                         engine.stop();
@@ -402,16 +399,16 @@ const audioSub = fromAtom(db)
         },
     });
 
-// Volume is the only live audio parameter (ADR 0005 — the worklet is a plain
-// wavetable player; rule/tempo shape the sound only via the visual CA's frames).
+// Volume + stereo width are the live audio parameters (ADR 0005 — the worklet
+// is a wavetable player; rule/tempo shape the sound only via the visual frames).
 const audioCfgSub = fromAtom(db)
     .transform(
-        map((s: AppState) => s.volume),
+        map((s: AppState) => [s.volume, s.width] as const),
         dedupe(equiv),
     )
     .subscribe({
-        next(volume) {
-            if (engine.running) engine.setVolume(volume);
+        next([volume, width]) {
+            if (engine.running) engine.setConfig(volume, width);
         },
     });
 
@@ -419,14 +416,17 @@ const audioCfgSub = fromAtom(db)
 // paused: this is what updates the frozen drone (and reallocs on size change).
 const regionSub = fromAtom(db)
     .transform(
-        map((s: AppState) => [s.regionX, s.regionY, s.regionSize] as const),
+        map(
+            (s: AppState) =>
+                [s.regionX, s.regionY, s.regionW, s.regionH] as const,
+        ),
         dedupe(equiv),
     )
     .subscribe({
         next() {
             positionRegion();
             if (engine.running)
-                engine.pushSeed(extractRegion(), db.deref().regionSize);
+                engine.pushSeed(extractRegion());
         },
     });
 
@@ -450,6 +450,8 @@ const regionViewSub = fromAtom(db)
 // stay continuous instead of dotted.
 let lastGX = -1;
 let lastGY = -1;
+// Shift-drag rubber-band: the normalised anchor corner where the drag began.
+let rectAnchor: readonly [number, number] | null = null;
 
 const stamp = (gx: number, gy: number) => {
     const st = db.deref();
@@ -481,29 +483,45 @@ const strokeTo = (gx: number, gy: number) => {
 
 const gestureSub = gestureStream(canvas, { local: true }).subscribe({
     next(e) {
-        // Alt+pointer places the Region center and never draws (Risk 4, ADR
-        // 0002). The gesture carries the original DOM event, so altKey is here.
-        // Updating on start *and* drag lets you glide the Region across the
-        // canvas, scrubbing what the buffer reads.
-        const alt = (e.event as PointerEvent).altKey === true;
+        // Pointer modifiers (Risk 4, ADR 0002) — the gesture carries the
+        // original DOM event, so the modifier flags are here:
+        //   Shift = rubber-band a W×H Region rectangle (irregular window).
+        //   Alt   = move the Region center (glide it while dragging).
+        //   none  = draw. Modifiers never draw.
+        const ev = e.event as PointerEvent;
         if (e.type === "start" || e.type === "drag") {
             const [px, py] = e.pos;
-            if (alt) {
+            const nx = Math.min(1, Math.max(0, px / canvas.clientWidth));
+            const ny = Math.min(1, Math.max(0, py / canvas.clientHeight));
+            if (ev.shiftKey) {
+                if (e.type === "start") rectAnchor = [nx, ny];
+                const [ax, ay] = rectAnchor ?? [nx, ny];
+                const left = Math.min(ax, nx);
+                const right = Math.max(ax, nx);
+                const top = Math.min(ay, ny);
+                const bottom = Math.max(ay, ny);
                 db.swap((s) => ({
                     ...s,
-                    regionX: Math.min(1, Math.max(0, px / canvas.clientWidth)),
-                    regionY: Math.min(1, Math.max(0, py / canvas.clientHeight)),
+                    regionX: (left + right) / 2,
+                    regionY: (top + bottom) / 2,
+                    regionW: Math.max(1, Math.round((right - left) * COLS)),
+                    regionH: Math.max(1, Math.round((bottom - top) * ROWS)),
                 }));
                 return;
             }
-            const gx = ((px / canvas.clientWidth) * ca.cols) | 0;
-            const gy = ((py / canvas.clientHeight) * ca.rows) | 0;
+            if (ev.altKey) {
+                db.swap((s) => ({ ...s, regionX: nx, regionY: ny }));
+                return;
+            }
+            const gx = (nx * ca.cols) | 0;
+            const gy = (ny * ca.rows) | 0;
             if (e.type === "start") {
                 lastGX = -1; // begin a fresh stroke
             }
             strokeTo(gx, gy);
         } else if (e.type === "end") {
             lastGX = -1;
+            rectAnchor = null;
         }
     },
 });
@@ -554,8 +572,11 @@ const audioOn$ = field$((s) => s.audioOn);
 const bpm$ = field$((s) => s.bpm);
 const visSub$ = field$((s) => s.visualSubdivision);
 const volume$ = field$((s) => s.volume);
+const width$ = field$((s) => s.width);
+// A size preset is "pressed" only when the Region is that exact square (a
+// Shift-drag rectangle un-presses all of them).
 const sizePressed$ = (n: number) =>
-    field$((s) => (s.regionSize === n ? "true" : "false"));
+    field$((s) => (s.regionW === n && s.regionH === n ? "true" : "false"));
 
 const runLabel$ = running$.transform(map((r) => (r ? "Pause" : "Run")));
 const genText$ = gen$.transform(map((g: number) => g.toLocaleString("en-US")));
@@ -567,6 +588,7 @@ const audioLabel$ = audioOn$.transform(map((on) => (on ? "Audio ⏻" : "Audio"))
 const bpmText$ = bpm$.transform(map((b) => `${b | 0}`));
 const visSubText$ = visSub$.transform(map((v) => `${v.toFixed(2)}/beat`));
 const volumeText$ = volume$.transform(map((v) => `${v | 0} dB`));
+const widthText$ = width$.transform(map((w) => `${Math.round(w * 100)}%`));
 
 const num = (e: Event) => (e.target as HTMLInputElement).valueAsNumber;
 
@@ -817,8 +839,29 @@ const panel = [
             [
                 "div.field-head",
                 {},
+                ["span.field-label", {}, "Stereo width"],
+                ["span.field-value", {}, widthText$],
+            ],
+            [
+                "input.slider",
+                {
+                    type: "range",
+                    min: 0,
+                    max: 1,
+                    step: 0.01,
+                    value: width$,
+                    oninput: (e: Event) => db.resetIn(["width"], num(e)),
+                },
+            ],
+        ],
+        [
+            "div.field",
+            {},
+            [
+                "div.field-head",
+                {},
                 ["span.field-label", {}, "Region size (pitch)"],
-                ["span.field-value", {}, "Alt-click to move"],
+                ["span.field-value", {}, "Alt-drag move · Shift-drag box"],
             ],
             [
                 "div.seg.seg-sizes",
@@ -828,7 +871,8 @@ const panel = [
                     {
                         type: "button",
                         "aria-pressed": sizePressed$(n),
-                        onclick: () => db.resetIn(["regionSize"], n),
+                        onclick: () =>
+                            db.swap((s) => ({ ...s, regionW: n, regionH: n })),
                     },
                     `${n}`,
                 ]),
@@ -889,7 +933,7 @@ const panel = [
             ["kbd", {}, "a"],
             " audio · ",
         ],
-        "drag to draw · Alt-click to place the audio region",
+        "drag to draw · Alt-drag to move the audio region · Shift-drag to size it",
     ],
 ];
 

@@ -28,6 +28,12 @@ export interface AppState {
     audioOn: boolean;
     /** output volume in dB (−18 = §3 conservative default) */
     volume: number;
+    /**
+     * stereo width (0..1): the right channel reads the same wavetable offset by
+     * `width · tableLen/2` samples. 0 = dead-centre mono; 1 = maximal L/R phase
+     * decorrelation. Pure phase spread — no pitch change.
+     */
+    width: number;
     /** master tempo, beats per minute (ADR 0001) */
     bpm: number;
     /**
@@ -37,9 +43,15 @@ export interface AppState {
      * on and running, this also sets the audible morph rate (ADR 0005).
      */
     visualSubdivision: number;
-    /** Region side in cells — sets pitch (2^n for clean periods; ADR 0002) */
-    regionSize: number;
-    /** Region centre X, normalised 0..1 across the grid (Alt-click moves it) */
+    /**
+     * Region width in cells. The row length sets the raster-scan carrier
+     * (sampleRate/regionW); regionW·regionH is the table length → loop pitch
+     * (ADR 0002). Size buttons set regionW=regionH; Shift-drag sets W×H freely.
+     */
+    regionW: number;
+    /** Region height in cells (see regionW). */
+    regionH: number;
+    /** Region centre X, normalised 0..1 across the grid (Alt-click/drag moves it) */
     regionX: number;
     /** Region centre Y, normalised 0..1 across the grid */
     regionY: number;
@@ -74,9 +86,11 @@ export const db = defAtom<AppState>({
     // Audio/tempo — instrument state, intentionally outside DEFAULTS (ADR 0004).
     audioOn: false,
     volume: -18,
+    width: 0.5,
     bpm: 120,
     visualSubdivision: 4,
-    regionSize: 64,
+    regionW: 64,
+    regionH: 64,
     regionX: 0.5,
     regionY: 0.5,
 });

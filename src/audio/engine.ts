@@ -9,20 +9,15 @@
 import processorSrc from "./processor.js?raw";
 import { level$, wave$ } from "../state.js";
 
-export interface AudioConfig {
-    volume: number;
-    /** Region side in cells — sets the initial table length (ADR 0002). */
-    regionSize: number;
-}
-
 export class AudioEngine {
     private ctx: AudioContext | null = null;
     private node: AudioWorkletNode | null = null;
     running = false;
 
     /** Start the context + graph. The call must originate from a user gesture
-     * (the `a` keypress) so `resume()` is allowed by the autoplay policy. */
-    async start(cfg: AudioConfig, seed: ArrayBuffer): Promise<void> {
+     * (the `a` keypress) so `resume()` is allowed by the autoplay policy. The
+     * `seed`'s byte length is the initial table length (one cell = one sample). */
+    async start(volume: number, width: number, seed: ArrayBuffer): Promise<void> {
         const ctx = new AudioContext();
         this.ctx = ctx;
 
@@ -43,7 +38,7 @@ export class AudioEngine {
             numberOfInputs: 0,
             numberOfOutputs: 1,
             outputChannelCount: [2],
-            processorOptions: { regionSize: cfg.regionSize },
+            processorOptions: { length: seed.byteLength },
         });
         this.node = node;
 
@@ -66,23 +61,26 @@ export class AudioEngine {
 
         this.running = true;
         // seed first so the table isn't silent, then enable the gain
-        node.port.postMessage(
-            { type: "seed", grid: seed, regionSize: cfg.regionSize },
-            [seed],
-        );
-        this.setVolume(cfg.volume);
+        node.port.postMessage({ type: "seed", grid: seed }, [seed]);
+        this.setConfig(volume, width);
         await ctx.resume(); // inside the `a` gesture
     }
 
-    setVolume(volume: number): void {
+    setConfig(volume: number, width: number): void {
         if (!this.node) return;
-        this.node.port.postMessage({ type: "config", volume, enabled: true });
+        this.node.port.postMessage({
+            type: "config",
+            volume,
+            width,
+            enabled: true,
+        });
     }
 
-    /** Push a fresh Region into the worklet, transferring the backing buffer. */
-    pushSeed(grid: ArrayBuffer, regionSize: number): void {
+    /** Push a fresh Region into the worklet, transferring the backing buffer.
+     * The buffer's byte length becomes the table length (any W×H rectangle). */
+    pushSeed(grid: ArrayBuffer): void {
         if (!this.node) return;
-        this.node.port.postMessage({ type: "seed", grid, regionSize }, [grid]);
+        this.node.port.postMessage({ type: "seed", grid }, [grid]);
     }
 
     /** Stop and release the context (idempotent). */
