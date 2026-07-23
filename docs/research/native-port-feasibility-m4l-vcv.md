@@ -96,22 +96,38 @@ This is where feasibility is genuinely in question, and the answer is **yes, wit
   a subset of JS Array methods) and, more importantly for a fixed grid, **buffers**. `codebox~` can
   create sized/named/anonymous buffers and read/write with `peek`/`poke`; crucially "reading and
   writing in buffers does bound checking, so you cannot read or write out of bounds"
-  ([codebox reference](https://rnbo.cycling74.com/codebox)). A 64×64 region = 4096 cells fits a
-  buffer easily. The two grids (grid + double-buffer) = two `data`/`buffer~` objects.
+  ([codebox reference](https://rnbo.cycling74.com/codebox)). The CA grid is **600×600 = 360,000
+  cells** (`app.ts:20-21`), and the *sounding window* is **not a fixed size**: it defaults to 32×32
+  but is **freely resized on the fly via Shift-drag to an arbitrary W×H** anywhere up to the full
+  grid, with square-size presets only as a shortcut (`state.ts:56-57`). Dragging and resizing that
+  window is an essential mechanic, not a one-time config. So the two grids (grid + double-buffer)
+  become two `data` objects sized to the **full-grid maximum** (600×600 = 360k cells each — ~1.4 MB
+  as float, still trivial memory), and the sonified region is a **dynamic W×H sub-rectangle**
+  addressed inside them.
 - **`data` vs `buffer~`:** use **`data`** — it does not share memory with Max and supports
   `@external 0`, which "hides the buffer from the external world in the exported code," i.e. an
   internal scratch grid ([Using Buffers](https://rnbo.cycling74.com/learn/using-buffers)).
 - **Arbitrary loops over the array:** `for`/`while` are supported, so the whole
   double-loop-over-rows/cols step is expressible. `@state` counters drive per-sample stepping
-  (step every N samples → the audio-clock-CA mode).
+  (step every N samples → the audio-clock-CA mode). Caveat carried over from `audio-synthesis.md`
+  §2C: audio-rate stepping only stays real-time for **small** windows — a full 600×600 step is
+  ~millisecond-scale and can't run inside one audio vector, so large windows are wavetable-*playback*
+  of a captured region while only small windows can be the audio-clock oscillator. The window-size
+  mechanic thus doubles as the cheap/expensive-mode selector.
 
 **Constraints that shape (not block) the port:**
 
-1. **Buffer-size expressions are limited** — "the only two supported operators in size expressions
-   are `samplerate()` and `vectorsize()`," or you allocate a fixed named buffer (the docs' example
-   is size 44100). A 4096-cell grid is a fine fixed size; a *runtime-resizable* region (the browser's
-   32/64/128 switch) is awkward — you'd allocate max size and use a sub-range
-   ([codebox reference](https://rnbo.cycling74.com/codebox)).
+1. **No runtime-resizable buffers — and the sounding window resizes constantly.** Buffer-size
+   expressions support only `samplerate()` and `vectorsize()`, otherwise a fixed named size (the
+   docs' example is 44100) ([codebox reference](https://rnbo.cycling74.com/codebox)). You therefore
+   **cannot** grow or shrink a buffer as the user drags. The required pattern: allocate both grids at
+   the **full-grid maximum once** (600×600) and treat the live window as a **W×H sub-rectangle**,
+   with the current `regionW`/`regionH` carried as `@param`/`@state` — the neighbour-index and
+   raster-scan math walk a variable rectangle inside a fixed buffer. Knock-on effect: the wavetable
+   length is `regionW·regionH` and sets loop pitch (`state.ts:56`), so it **changes continuously
+   while dragging** — the read phasor's wrap length is a live parameter, not a constant. More moving
+   parts than the browser (where the table is just re-`postMessage`d on change), but ordinary index
+   arithmetic.
 2. **"Large buffers can take time to allocate and may interrupt audio"** — allocate once, never
    per-step ([Using Buffers](https://rnbo.cycling74.com/learn/using-buffers)). The kernel already
    double-buffers with no per-step allocation, so this matches.
@@ -208,8 +224,10 @@ drawing to `args.vg` (a **NanoVG** `NVGcontext*`); expensive renders can be cach
 ([Widget](https://vcvrack.com/docs-v2/structrack_1_1widget_1_1Widget) ·
 [ModuleWidget](https://vcvrack.com/docs-v2/structrack_1_1app_1_1ModuleWidget) ·
 [FramebufferWidget](https://vcvrack.com/docs-v2/structrack_1_1widget_1_1FramebufferWidget)). NanoVG
-gives filled rects per cell — straightforward for a 64×64 grid, and `FramebufferWidget` caching
-handles the redraw cost.
+gives filled rects per cell, but the grid is **600×600 = 360k cells** — far too many per-cell rects
+to redraw every frame, so it must render to a cached `FramebufferWidget` (redrawn only on generation
+change) or via an image/pixel upload rather than 360k live NanoVG calls. The draggable sound-window
+is a single rect overlaid on top.
 
 ### CV/gate integration — the platform-native angle
 
@@ -276,11 +294,13 @@ you commit to VCV *and* reject RNBO for M4L. Given the maintainer owns RNBO, the
 
 **The single highest-uncertainty claim is "the integer CA can step meaningfully inside RNBO
 `codebox~`."** Everything else (DSP in codebox, DSP in VCV, kernel in C++, NanoVG grid) is
-low-risk and well-trodden. So the de-risking prototype is a **minimal `codebox~` patch that holds a
-64×64 grid in two `data` buffers, runs one CA generation per trigger (or every N samples), and reads
-the result out** — proving: (a) buffer read/write bound-checking doesn't fight the neighbour-index
-math, (b) the buffer-can't-be-a-function-arg limitation is livable as one inline body, and (c) the
-step is cheap enough at audio rate. If that steps correctly, the M4L port is essentially assured and
+low-risk and well-trodden. So the de-risking prototype is a **minimal `codebox~` patch that holds the
+grid in two full-size `data` buffers (allocate 600×600, step a variable W×H sub-rectangle), runs one
+CA generation per trigger (or every N samples), and reads the result out** — proving: (a) buffer
+read/write bound-checking doesn't fight the neighbour-index math over a sub-rectangle, (b) the
+buffer-can't-be-a-function-arg limitation is livable as one inline body, (c) a `regionW`/`regionH`
+that changes at runtime works as sub-range params over a fixed max buffer, and (d) the step is cheap
+enough at audio rate for the window sizes you actually sonify. If that steps correctly, the M4L port is essentially assured and
 the DSP is the easy part. Do this before committing to either native target.
 
 ---
