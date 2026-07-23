@@ -3,6 +3,8 @@
 > Location: `docs/research/audio-synthesis.md` (English version)
 > As of: 2026-07-14 · Status: research complete, implementation open
 > The original German brainstorm is archived at [`_legacy/audio-synthesis.md`](./_legacy/audio-synthesis.md).
+> §5 (GUI) has since been reconciled with the shipped implementation on branch
+> `poc-audio-synthesis` (see `src/app.ts`, `src/state.ts`); the rest is the original snapshot.
 
 Goal: turn the purely visual CA sketch into an audio-visual one. **A cutout of the running automaton is written into an audio buffer and played back via Web Audio.** Aesthetic: glitch-noise — Ryoji Ikeda, Raster-Noton, alva noto. Not "sonification as melody", but _data as sound material_.
 
@@ -51,7 +53,7 @@ The frame (cutout → buffer → playback) is right. Four viable mappings, in as
 
 ### A. Region scan as wavetable (base)
 
-A cutout (e.g. 64×64) is written row by row (raster scan) into a table: cell 1 → `+g`, cell 0 → `−g`. A phasor reads it as a loop.
+A cutout (variable size — see §5; worked here at 64×64) is written row by row (raster scan) into a table: cell 1 → `+g`, cell 0 → `−g`. A phasor reads it as a loop.
 
 The math: 64×64 = 4096 samples @ 48 kHz → at rate 1× an **~11.7 Hz loop** = rhythmic clicking/rattling (very Ikeda). Higher rates pitch into the tonal range; the **row periodicity (64 samples) produces a carrier at ~750 Hz** with comb structure. Our plaid patterns are quasi-periodic → harmonic combs with glitching breaks at the weave edges. The CA's progress rewrites the table → spectral animation.
 
@@ -151,9 +153,9 @@ There is headroom for polyphony (multiple regions).
 
 ### Region selection on the canvas
 
-A visible **selection frame** in the existing blue (`#3b3bff`), movable by drag. Size **not free but stepped (32 / 64 / 128)** — keeps buffer sizes at powers of two (clean periodicities, FFT-friendly) and spares resize handles on 600-px cells.
+A visible **selection frame** in the existing blue (`#3b3bff`) over the full 600×600 grid. Size is **freely resizable**: **Shift-drag rubber-bands an arbitrary W×H rectangle** (irregular window, min 1×1 cell), and **square-size presets (16 / 32 / 64 / 128)** in the panel are a shortcut that sets `regionW = regionH`; a Shift-drag rectangle un-presses the preset buttons. Default is 32×32. The buffer length is `regionW · regionH`, which sets the loop pitch (`state.ts:56`) — so it changes continuously while dragging.
 
-**Conflict with drawing** (important): a drag _inside_ the frame keeps drawing, a drag _on_ the frame (narrow hit zone) moves it; Alt+drag moves from anywhere. The frame exists only while audio is active — **without audio the sketch stays exactly as before.**
+**Interaction (important):** a plain drag draws/erases as before; **Alt-drag glides the region center**, **Shift-drag sizes the region box**. The frame exists only while audio is active — **without audio the sketch stays exactly as before.**
 
 ### Panel section "Audio"
 
@@ -164,7 +166,7 @@ New, below the pencil block, **collapsible** (details pattern), so the panel doe
 - **Mode** — segmented "Scan / Race" (analogous to the existing Draw/Erase pattern)
 - **Rate** — logarithmic, ±3 octaves around 1×
 - **Drift** (race only) — W/R ratio, **very fine resolution around 1.0**
-- **Region Size** — 32 / 64 / 128
+- **Region Size** — square presets 16 / 32 / 64 / 128 (plus free Shift-drag resize on the canvas)
 - **Level meter** — a thin strip
 
 Plus a **waveform strip** (mini canvas ~248×40 px): draws the _sounding_ table. That is the tonemata lesson — the audio-visual coupling is not just asserted but shown. The worklet posts decimated snapshots back (~15 Hz is enough).
@@ -185,7 +187,7 @@ Audio parameters as their own slice in the `defAtom` — and, like `brush`/`tool
 
 ### Phase 1 — MVP "Scan + Race"
 
-Region frame (64×64, movable) · worklet with table and two phasors · Scan/Race modes · transport via transferables · DC block + limiter + ramps · panel section (Power/Volume/Mode/Rate/Drift/Size) · waveform strip · key `a`.
+Region frame (default 32×32, Alt-drag to move, Shift-drag to resize freely, square presets 16/32/64/128) · worklet with table and two phasors · Scan/Race modes · transport via transferables · DC block + limiter + ramps · panel section (Power/Volume/Mode/Rate/Drift/Size) · waveform strip · key `a`.
 
 → The core experience is complete: _the cutout sounds, and drift breaks it in the good way._
 
@@ -206,7 +208,7 @@ Each phase is individually shippable.
 A usability check after phase 1 — five minutes of playing it yourself, three questions:
 
 1. Do you find the frame?
-2. Do you move it by accident while drawing? (hit-zone tuning)
+2. Are the Alt-drag (move) / Shift-drag (resize) modifiers discoverable, or do they need the on-canvas hint?
 3. Do you understand Scan vs. Race without docs?
 
 Open sonically: whether the keeper rules are _interesting enough_ as a wavetable, or whether audio needs its **own rule pool** (the band/flood rules rejected for visuals could be sonically attractive — dense flood = noise bed, bands = strong periodicity). **Don't rule it out prematurely: the visual filter is not an audio filter.**
