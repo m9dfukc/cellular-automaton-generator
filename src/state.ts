@@ -54,7 +54,8 @@ export interface AppState {
     /**
      * Region width in cells. The row length sets the raster-scan carrier
      * (sampleRate/regionW); regionW·regionH is the table length → loop pitch
-     * (ADR 0002). Size buttons set regionW=regionH; Shift-drag sets W×H freely.
+     * (ADR 0002). Size buttons set regionW=regionH; corner handles / Shift-drag
+     * set W×H freely.
      */
     regionW: number;
     /** Region height in cells (see regionW). */

@@ -98,6 +98,15 @@ const stageInner = document.createElement("div");
 stageInner.className = "stage-inner";
 const regionEl = document.createElement("div");
 regionEl.className = "region-frame";
+// Direct-manipulation handles: four corner brackets (resize) + a centre grip
+// (move). They double as the frame's visibility marks and as touch targets, so
+// the Region is editable without Shift/Alt modifiers (which stay for desktop).
+regionEl.innerHTML =
+    '<span class="region-corner nw"></span>' +
+    '<span class="region-corner ne"></span>' +
+    '<span class="region-corner se"></span>' +
+    '<span class="region-corner sw"></span>' +
+    '<span class="region-grip"></span>';
 stageInner.append(canvas, regionEl);
 // replaceChildren rather than appendChild: init owns the stage, so a hot
 // reload can't stack a second canvas under the first. Teardown alone can't
@@ -152,6 +161,10 @@ const positionRegion = () => {
     regionEl.style.top = `${(cy - hN / 2) * 100}%`;
     regionEl.style.width = `${wN * 100}%`;
     regionEl.style.height = `${hN * 100}%`;
+    // Shrink the handles when the rendered frame gets too small for full-size
+    // brackets (their inward arms would otherwise overflow the opposite edge).
+    const pxMin = Math.min(canvas.clientWidth * wN, canvas.clientHeight * hN);
+    regionEl.classList.toggle("compact", pxMin < 46);
 };
 
 /** Re-seed the grid from the current seed parameters (rule untouched). */
@@ -466,6 +479,9 @@ const gestureSub = gestureStream(canvas, { local: true }).subscribe({
             const [px, py] = e.pos;
             const nx = Math.min(1, Math.max(0, px / canvas.clientWidth));
             const ny = Math.min(1, Math.max(0, py / canvas.clientHeight));
+            // Shift/Alt region edits get the same drag-only scrim as the
+            // handles (`.editing`), removed on `end` below.
+            if (ev.shiftKey || ev.altKey) regionEl.classList.add("editing");
             if (ev.shiftKey) {
                 if (e.type === "start") rectAnchor = [nx, ny];
                 const [ax, ay] = rectAnchor ?? [nx, ny];
@@ -495,9 +511,93 @@ const gestureSub = gestureStream(canvas, { local: true }).subscribe({
         } else if (e.type === "end") {
             lastGX = -1;
             rectAnchor = null;
+            regionEl.classList.remove("editing");
         }
     },
 });
+
+// Direct manipulation of the Region frame (the modifier-free, touch-friendly
+// path). The handles are children of `regionEl` (a sibling of the canvas), so
+// their pointer events never reach the canvas gestureStream — no interception
+// needed. The frame interior stays `pointer-events: none`, so the pencil still
+// draws through it; only strokes that *start* on a handle are diverted.
+const canvasNorm = (clientX: number, clientY: number): [number, number] => {
+    const r = canvas.getBoundingClientRect();
+    return [
+        Math.min(1, Math.max(0, (clientX - r.left) / r.width)),
+        Math.min(1, Math.max(0, (clientY - r.top) / r.height)),
+    ];
+};
+
+// The Region's four corners in normalised canvas coords, using the same
+// fit-clamped centre `positionRegion` renders (so a resize starts where the
+// frame is actually drawn, not where an un-clamped centre would put it).
+const regionCorners = () => {
+    const s = db.deref();
+    const wN = s.regionW / COLS;
+    const hN = s.regionH / ROWS;
+    const cx = Math.min(1 - wN / 2, Math.max(wN / 2, s.regionX));
+    const cy = Math.min(1 - hN / 2, Math.max(hN / 2, s.regionY));
+    return { left: cx - wN / 2, right: cx + wN / 2, top: cy - hN / 2, bottom: cy + hN / 2 };
+};
+
+// `makeApply` runs at pointerdown (to snapshot any anchor) and returns the
+// per-move updater. `.editing` drives the drag-only scrim.
+const wireRegionDrag = (
+    el: HTMLElement,
+    makeApply: () => (nx: number, ny: number) => void,
+) => {
+    el.addEventListener("pointerdown", (ev: PointerEvent) => {
+        ev.preventDefault();
+        el.setPointerCapture(ev.pointerId);
+        regionEl.classList.add("editing");
+        const apply = makeApply();
+        const onMove = (e: PointerEvent) =>
+            apply(...canvasNorm(e.clientX, e.clientY));
+        onMove(ev); // apply at the grab point (no jump)
+        const end = () => {
+            regionEl.classList.remove("editing");
+            el.removeEventListener("pointermove", onMove);
+            el.removeEventListener("pointerup", end);
+            el.removeEventListener("pointercancel", end);
+        };
+        el.addEventListener("pointermove", onMove);
+        el.addEventListener("pointerup", end);
+        el.addEventListener("pointercancel", end);
+    });
+};
+
+// Centre grip → move (same as Alt-drag): the pointer is the new centre.
+wireRegionDrag(
+    regionEl.querySelector(".region-grip") as HTMLElement,
+    () => (nx, ny) => db.swap((s) => ({ ...s, regionX: nx, regionY: ny })),
+);
+
+// Corner bracket → resize (anchored rubber-band): the opposite corner stays
+// fixed while the grabbed one follows the pointer.
+for (const cls of ["nw", "ne", "se", "sw"] as const) {
+    wireRegionDrag(
+        regionEl.querySelector(`.region-corner.${cls}`) as HTMLElement,
+        () => {
+            const c = regionCorners();
+            const ax = cls === "nw" || cls === "sw" ? c.right : c.left;
+            const ay = cls === "nw" || cls === "ne" ? c.bottom : c.top;
+            return (nx, ny) => {
+                const left = Math.min(ax, nx);
+                const right = Math.max(ax, nx);
+                const top = Math.min(ay, ny);
+                const bottom = Math.max(ay, ny);
+                db.swap((s) => ({
+                    ...s,
+                    regionX: (left + right) / 2,
+                    regionY: (top + bottom) / 2,
+                    regionW: Math.max(1, Math.round((right - left) * COLS)),
+                    regionH: Math.max(1, Math.round((bottom - top) * ROWS)),
+                }));
+            };
+        },
+    );
+}
 
 // Keyboard: space = run/pause, n = step (paused), r = randomize, x = reset,
 // s = seed, c = clear, a = audio on/off (the keypress is the user gesture that
@@ -823,7 +923,7 @@ const panel = [
                 "div.field-head",
                 {},
                 ["span.field-label", {}, "Region size (pitch)"],
-                ["span.field-value", {}, "Alt-drag move · Shift-drag box"],
+                ["span.field-value", {}, "Drag grip · corners resize"],
             ],
             [
                 "div.seg.seg-sizes",
@@ -895,7 +995,7 @@ const panel = [
             ["kbd", {}, "a"],
             " audio · ",
         ],
-        "drag to erase · Alt-drag to move the audio region · Shift-drag to size it",
+        "drag to erase · drag the blue frame's grip to move the audio region, its corners to resize (Shift/Alt-drag also work)",
     ],
 ];
 

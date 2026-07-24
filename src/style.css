@@ -57,11 +57,139 @@ body {
     position: absolute;
     display: none;
     box-sizing: border-box;
-    border: 1px solid #3b3bff;
+    /* A thin line vanishes against the high-frequency B/W field, so the frame
+       reads mainly from its corner brackets + grip below. The border is a
+       double stroke (blue core, dark halo) so even the edge survives on white
+       and black cells. */
+    border: 1px solid rgba(59, 59, 255, 0.9);
     box-shadow:
-        0 0 0 1px rgba(0, 0, 0, 0.5),
-        0 0 12px -2px #3b3bff;
+        0 0 0 1px rgba(0, 0, 0, 0.55),
+        inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+        0 0 22px 0 rgba(59, 59, 255, 0.75);
     pointer-events: none;
+}
+
+/* While a handle is being dragged, dim everything outside the Region (crop-view
+   vignette) so the sonified window pops. Rest state stays clean — no scrim.
+   Keeps the blue glow (before the scrim layer) so the frame still reads. */
+.region-frame.editing {
+    box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.55),
+        inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+        0 0 22px 0 rgba(59, 59, 255, 0.75),
+        0 0 0 9999px rgba(0, 0, 0, 0.38);
+}
+
+/* Corner brackets: L-marks that read as a crop/selection frame and double as
+   the resize grips. Light core + dark drop-shadow so they pop on any cell. The
+   18px box is the touch target; the bracket is drawn on two edges via ::before.
+   Offset by ~1px so the L hugs the frame corner and reinforces it, arms running
+   inward along the border. */
+.region-corner {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    box-sizing: border-box;
+    pointer-events: auto;
+    touch-action: none;
+}
+.region-corner::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 2px solid #dbe6ff;
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+}
+.region-corner.nw {
+    left: -2px;
+    top: -2px;
+    cursor: nwse-resize;
+}
+.region-corner.ne {
+    right: -2px;
+    top: -2px;
+    cursor: nesw-resize;
+}
+.region-corner.se {
+    right: -2px;
+    bottom: -2px;
+    cursor: nwse-resize;
+}
+.region-corner.sw {
+    left: -2px;
+    bottom: -2px;
+    cursor: nesw-resize;
+}
+.region-corner.nw::before {
+    border-right: 0;
+    border-bottom: 0;
+}
+.region-corner.ne::before {
+    border-left: 0;
+    border-bottom: 0;
+}
+.region-corner.se::before {
+    border-left: 0;
+    border-top: 0;
+}
+.region-corner.sw::before {
+    border-right: 0;
+    border-top: 0;
+}
+
+/* Centre grip: the move handle. A small plus/cross in the same light-on-halo
+   ink as the corner brackets — reads as "move", stays consistent with them. */
+.region-grip {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 18px;
+    height: 18px;
+    margin: -9px 0 0 -9px;
+    pointer-events: auto;
+    touch-action: none;
+    cursor: move;
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+}
+.region-grip::before,
+.region-grip::after {
+    content: "";
+    position: absolute;
+    background: #dbe6ff;
+}
+.region-grip::before {
+    left: 50%;
+    top: 2px;
+    width: 2px;
+    height: 14px;
+    margin-left: -1px;
+}
+.region-grip::after {
+    top: 50%;
+    left: 2px;
+    height: 2px;
+    width: 14px;
+    margin-top: -1px;
+}
+
+/* Compact tier (set by positionRegion when the frame renders small): shorter
+   bracket arms + smaller grip so nothing overflows a tiny Region. */
+.region-frame.compact .region-corner {
+    width: 9px;
+    height: 9px;
+}
+.region-frame.compact .region-grip {
+    width: 10px;
+    height: 10px;
+    margin: -5px 0 0 -5px;
+}
+.region-frame.compact .region-grip::before {
+    top: 1px;
+    height: 8px;
+}
+.region-frame.compact .region-grip::after {
+    left: 1px;
+    width: 8px;
 }
 
 .ca-canvas {
