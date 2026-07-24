@@ -41,10 +41,12 @@ pnpm-debug.log*
 Thumbs.db
 
 # llm
-.claude/
-CLAUDE.md
-CONTEXT.md
-docs/agents/
+# Versioned: agent contract & shared config — CLAUDE.md, CONTEXT.md, docs/adr/,
+# docs/agents/, .claude/rules/, .claude/settings.json.
+# Ignored: personal & portable bits — settings.local.json, skills/, .cc-writes/.
+.claude/*
+!.claude/rules/
+!.claude/settings.json
 
 # transient handoffs (per-session, not versioned)
 docs/handoffs/
