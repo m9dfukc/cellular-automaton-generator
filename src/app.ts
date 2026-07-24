@@ -211,6 +211,7 @@ const reset = () => {
 const stepForward = () => {
     if (db.deref().running) return;
     ca.process(); // advance the grid one generation (no draw)
+    maybeReseed(); // re-seed noisy patches before drawing, so they show at once
     ca.render(); // colour the new current grid (same formula as step())
     ca.blit(ctx);
     gen$.next(ca.generation);
@@ -233,6 +234,34 @@ let frames = 0;
 let acc = 0;
 let stepAcc = 0;
 let lastScanGen = 0; // generation of the last entropy scan (POC)
+
+/**
+ * POC: periodically scan patches for noise and re-seed the noisy ones. Runs
+ * from both the RAF loop (while running) and `stepForward` (while paused), so
+ * manual stepping re-seeds on the same generation cadence as free-running.
+ * Threshold 1 = off: the entropy ceiling is 1, so nothing qualifies and there
+ * is no point scanning. Mutates the grid in place; the caller redraws.
+ */
+const maybeReseed = () => {
+    const st = db.deref();
+    if (st.entropyThreshold >= 1) return;
+    if (ca.generation < lastScanGen) lastScanGen = 0; // counter was reset
+    if (ca.generation - lastScanGen < CHECK_INTERVAL) return;
+    lastScanGen = ca.generation;
+    const { noisy, max } = scanEntropy(
+        ca.grid,
+        ca.cols,
+        ca.rows,
+        st.entropyThreshold,
+    );
+    entropy$.next(max);
+    if (noisy.length) {
+        for (const p of noisy) ca.populateRect(p.x0, p.y0, p.w, p.h);
+        console.log(
+            `[entropy] gen ${ca.generation}: re-seeded ${noisy.length} patch(es), max entropy ${max.toFixed(3)}`,
+        );
+    }
+};
 
 const rafSub = fromRAF({ timestamp: true, t0: true }).subscribe({
     next(t) {
@@ -258,29 +287,7 @@ const rafSub = fromRAF({ timestamp: true, t0: true }).subscribe({
             }
             // steps === 0 -> slow motion: hold the last frame, advance nothing
 
-            // POC: periodically scan patches for noise, re-seed the noisy ones.
-            // Threshold 1 = off: the entropy ceiling is 1, so nothing qualifies
-            // and there is no point scanning.
-            if (st.entropyThreshold < 1) {
-                if (ca.generation < lastScanGen) lastScanGen = 0; // counter was reset
-                if (ca.generation - lastScanGen >= CHECK_INTERVAL) {
-                    lastScanGen = ca.generation;
-                    const { noisy, max } = scanEntropy(
-                        ca.grid,
-                        ca.cols,
-                        ca.rows,
-                        st.entropyThreshold,
-                    );
-                    entropy$.next(max);
-                    if (noisy.length) {
-                        for (const p of noisy)
-                            ca.populateRect(p.x0, p.y0, p.w, p.h);
-                        console.log(
-                            `[entropy] gen ${ca.generation}: re-seeded ${noisy.length} patch(es), max entropy ${max.toFixed(3)}`,
-                        );
-                    }
-                }
-            }
+            maybeReseed();
         } else if (dirty) {
             ca.render();
             ca.blit(ctx);
